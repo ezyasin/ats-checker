@@ -2,15 +2,24 @@ import { NextRequest, NextResponse } from "next/server";
 import { extractTextFromPdf } from "@/lib/parsers/pdf";
 import { extractTextFromDocx } from "@/lib/parsers/docx";
 import { validateFileBytes, validateJobDescription } from "@/lib/validators";
-import { client, getModel } from "@/lib/claude";
-import { buildAnalysisPrompt } from "@/lib/promptBuilder";
+import { createLLMClient, getAvailableProviders, getDefaultProvider } from "@/lib/llm/factory";
 import type { AnalysisResult } from "@/types/analysis";
+import type { LLMProvider } from "@/lib/llm/types";
 
 export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData();
     const file = formData.get("cv") as File | null;
     const jobDescription = formData.get("jobDescription") as string | null;
+    const providerParam = formData.get("provider") as string | null;
+
+    // Determine which LLM provider to use
+    let provider: LLMProvider = (providerParam as LLMProvider) || getDefaultProvider();
+    const available = getAvailableProviders();
+
+    if (!available.includes(provider)) {
+      provider = getDefaultProvider();
+    }
 
     if (!file) {
       return NextResponse.json(
@@ -67,55 +76,27 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Build prompt and call Claude
-    const prompt = buildAnalysisPrompt(cvText, jobDescription);
-
-    const message = await client.messages.create({
-      model: getModel(),
-      max_tokens: 8000,
-      messages: [{ role: "user", content: prompt }],
-    });
-
-    // Extract text response
-    const textBlock = message.content.find((block) => block.type === "text");
-    if (!textBlock || textBlock.type !== "text") {
-      return NextResponse.json(
-        { error: "Failed to get analysis from AI. Please try again." },
-        { status: 502 }
-      );
-    }
-
-    // Parse JSON response
-    let result: AnalysisResult;
+    // Create LLM client and analyze
     try {
-      const jsonStr = textBlock.text
-        .replace(/```json\n?/g, "")
-        .replace(/```\n?/g, "")
-        .trim();
-      result = JSON.parse(jsonStr);
-    } catch {
+      const llmClient = createLLMClient(provider);
+      const result = await llmClient.analyze(cvText, jobDescription);
+      return NextResponse.json(result);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error";
+
+      if (message.includes("API key")) {
+        return NextResponse.json(
+          { error: `${provider.toUpperCase()} API key is not configured.` },
+          { status: 503 }
+        );
+      }
+
+      console.error(`${provider} analysis error:`, error);
       return NextResponse.json(
-        { error: "Failed to parse AI response. Please try again." },
+        { error: `Failed to analyze with ${provider}. Please try again.` },
         { status: 502 }
       );
     }
-
-    // Basic validation of result structure
-    if (
-      typeof result.atsScore !== "number" ||
-      result.atsScore < 0 ||
-      result.atsScore > 100 ||
-      !Array.isArray(result.matchedKeywords) ||
-      !Array.isArray(result.missingKeywords) ||
-      !Array.isArray(result.suggestions)
-    ) {
-      return NextResponse.json(
-        { error: "AI returned an invalid response structure. Please try again." },
-        { status: 502 }
-      );
-    }
-
-    return NextResponse.json(result);
   } catch (error) {
     console.error("Analysis error:", error);
     return NextResponse.json(

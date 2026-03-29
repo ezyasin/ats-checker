@@ -1,9 +1,11 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { useEffect } from "react";
 import { useAnalysisStore } from "@/store/analysis";
 import { UploadZone } from "@/components/UploadZone";
 import { JobInput } from "@/components/JobInput";
+import { LLMProviderSelector } from "@/components/LLMProviderSelector";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 
@@ -72,6 +74,7 @@ export default function HomePage() {
   const {
     cvFile,
     jobDescription,
+    llmProvider,
     isAnalyzing,
     setAnalyzing,
     setResult,
@@ -79,6 +82,11 @@ export default function HomePage() {
     setCvText,
     error,
   } = useAnalysisStore();
+
+  // Debug logging
+  useEffect(() => {
+    console.log("isAnalyzing state changed to:", isAnalyzing);
+  }, [isAnalyzing]);
 
   const canAnalyze =
     cvFile && jobDescription.trim().length >= 50 && !isAnalyzing;
@@ -89,10 +97,14 @@ export default function HomePage() {
     setAnalyzing(true);
     setError(null);
 
+    const startTime = Date.now();
+    const minLoadingTime = 1500; // Show loading indicator for at least 1.5 seconds
+
     try {
       const formData = new FormData();
       formData.append("cv", cvFile);
       formData.append("jobDescription", jobDescription);
+      formData.append("provider", llmProvider);
 
       const response = await fetch("/api/analyze", {
         method: "POST",
@@ -101,8 +113,15 @@ export default function HomePage() {
 
       const data = await response.json();
 
+      // Ensure minimum loading time for visibility
+      const elapsedTime = Date.now() - startTime;
+      if (elapsedTime < minLoadingTime) {
+        await new Promise(resolve => setTimeout(resolve, minLoadingTime - elapsedTime));
+      }
+
       if (!response.ok) {
         setError(data.error || "Analysis failed. Please try again.");
+        setAnalyzing(false);
         return;
       }
 
@@ -110,9 +129,11 @@ export default function HomePage() {
       if (data.improvedCv) {
         setCvText(data.improvedCv);
       }
+      setAnalyzing(false);
       router.push("/results");
-    } catch {
+    } catch (err) {
       setError("Network error. Please check your connection and try again.");
+      setAnalyzing(false);
     }
   }
 
@@ -198,6 +219,11 @@ export default function HomePage() {
             Upload your CV and paste the job description
           </p>
 
+          {/* LLM Provider Selector */}
+          <div className="mb-10">
+            <LLMProviderSelector />
+          </div>
+
           <div className="grid gap-8 md:grid-cols-2">
             {/* CV Upload */}
             <div className="space-y-3">
@@ -213,23 +239,18 @@ export default function HomePage() {
 
           {/* Error */}
           {error && (
-            <div className="mt-6 rounded-lg border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+            <div className="mt-6 rounded-lg border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm text-destructive animate-in fade-in slide-in-from-top-2 duration-300">
               {error}
             </div>
           )}
 
-          {/* Analyze Button */}
-          <div className="mt-8 flex justify-center">
-            <Button
-              size="lg"
-              onClick={handleAnalyze}
-              disabled={!canAnalyze}
-              className="min-w-[220px] text-base"
-            >
-              {isAnalyzing ? (
-                <span className="flex items-center gap-2">
+          {/* Loading State Indicator */}
+          {isAnalyzing && (
+            <div className="mt-6 rounded-lg border border-blue-200 bg-blue-50 px-6 py-4 text-sm text-blue-900 animate-in fade-in slide-in-from-top-2 duration-300">
+              <div className="flex items-center gap-3">
+                <div className="relative h-5 w-5 flex-shrink-0">
                   <svg
-                    className="h-4 w-4 animate-spin"
+                    className="h-5 w-5 animate-spin text-blue-600"
                     viewBox="0 0 24 24"
                     fill="none"
                   >
@@ -247,12 +268,78 @@ export default function HomePage() {
                       d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
                     />
                   </svg>
-                  Analyzing...
-                </span>
+                </div>
+                <div className="flex-1">
+                  <div className="font-medium">Analyzing your CV...</div>
+                  <div className="text-xs opacity-75 mt-0.5">This may take a few seconds</div>
+                </div>
+              </div>
+              <div className="mt-3 h-1 w-full rounded-full bg-blue-200 overflow-hidden">
+                <div className="h-full bg-blue-600 rounded-full animate-pulse" style={{ width: "65%" }} />
+              </div>
+            </div>
+          )}
+
+          {/* Analyze Button */}
+          <div className="mt-8 flex justify-center">
+            <button
+              onClick={handleAnalyze}
+              disabled={!canAnalyze || isAnalyzing}
+              className={`
+                relative px-8 py-3.5 rounded-lg font-semibold text-base
+                transition-all duration-300 ease-in-out
+                flex items-center justify-center gap-2
+                border-0 outline-none
+                ${
+                  !canAnalyze || isAnalyzing
+                    ? "bg-gray-300 text-gray-500 cursor-not-allowed opacity-60"
+                    : "bg-blue-600 text-white cursor-pointer hover:bg-blue-800 active:bg-blue-900 hover:shadow-2xl hover:shadow-blue-500/50 active:scale-90 hover:-translate-y-1"
+                }
+                min-w-[240px]
+              `}
+            >
+              {isAnalyzing ? (
+                <>
+                  <svg
+                    className="h-4 w-4 animate-spin flex-shrink-0"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                  >
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    />
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                    />
+                  </svg>
+                  <span>Analyzing...</span>
+                </>
               ) : (
-                "Analyze ATS Score"
+                <>
+                  <svg
+                    className="h-4 w-4 flex-shrink-0"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M13 10V3L4 14h7v7l9-11h-7z"
+                    />
+                  </svg>
+                  <span>Analyze ATS Score</span>
+                </>
               )}
-            </Button>
+            </button>
           </div>
 
           <p className="mt-3 text-center text-xs text-muted-foreground">
