@@ -6,8 +6,7 @@ import { useAnalysisStore } from "@/store/analysis";
 import { ScoreGauge } from "@/components/ScoreGauge";
 import { KeywordBreakdown } from "@/components/KeywordBreakdown";
 import { SuggestionCard } from "@/components/SuggestionCard";
-import { SectionScores } from "@/components/SectionScores";
-import { Button } from "@/components/ui/button";
+import { SectionScores } from "@/components/SectionScores";import { CVDiffViewer } from "@/components/CVDiffViewer";import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -26,6 +25,13 @@ export default function ResultsPage() {
     if (!result) {
       router.replace("/");
     }
+    console.log('Results page - result object:', {
+      hasResult: !!result,
+      hasOriginalCv: !!result?.originalCv,
+      hasImprovedCv: !!result?.improvedCv,
+      originalCvLength: result?.originalCv?.length,
+      improvedCvLength: result?.improvedCv?.length,
+    });
   }, [result, router]);
 
   if (!result) {
@@ -131,6 +137,7 @@ export default function ResultsPage() {
             <TabsTrigger value="suggestions">
               Suggestions ({result.suggestions.length})
             </TabsTrigger>
+            <TabsTrigger value="diff">Changes Made (Diff)</TabsTrigger>
             <TabsTrigger value="improved-cv">Improved CV</TabsTrigger>
           </TabsList>
 
@@ -166,6 +173,25 @@ export default function ResultsPage() {
             </div>
           </TabsContent>
 
+          <TabsContent value="diff" className="mt-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm">
+                  Changes Made to Your CV
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {result.originalCv && result.improvedCv ? (
+                  <CVDiffViewer original={result.originalCv} improved={result.improvedCv} />
+                ) : (
+                  <div className="text-center text-gray-500 py-8">
+                    No changes to display
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
           <TabsContent value="improved-cv" className="mt-6">
             <Card>
               <CardHeader>
@@ -181,11 +207,17 @@ export default function ResultsPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <ScrollArea className="h-[600px]">
-                  <div className="prose prose-sm max-w-none dark:prose-invert whitespace-pre-wrap">
-                    {result.improvedCv}
+                {result.improvedCv ? (
+                  <ScrollArea className="h-[600px]">
+                    <div className="prose prose-sm max-w-none dark:prose-invert whitespace-pre-wrap">
+                      {result.improvedCv}
+                    </div>
+                  </ScrollArea>
+                ) : (
+                  <div className="text-center text-gray-500 py-8">
+                    No improved CV available
                   </div>
-                </ScrollArea>
+                )}
               </CardContent>
             </Card>
           </TabsContent>

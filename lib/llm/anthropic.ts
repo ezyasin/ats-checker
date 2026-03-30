@@ -57,5 +57,8 @@ export class ClaudeClient implements LLMClient {
     if (!Array.isArray(data.suggestions)) {
       throw new Error("Invalid suggestions format");
     }
+    if (typeof data.improvedCv !== "string" || data.improvedCv.length === 0) {
+      throw new Error("Missing or invalid improvedCv in response");
+    }
   }
 }

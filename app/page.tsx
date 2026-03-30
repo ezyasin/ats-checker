@@ -1,376 +1,161 @@
-"use client";
+'use client';
 
-import { useRouter } from "next/navigation";
-import { useEffect } from "react";
-import { useAnalysisStore } from "@/store/analysis";
-import { UploadZone } from "@/components/UploadZone";
-import { JobInput } from "@/components/JobInput";
-import { LLMProviderSelector } from "@/components/LLMProviderSelector";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-
-const steps = [
-  {
-    step: "1",
-    title: "Upload Your CV",
-    description: "Drop your PDF or DOCX resume — we extract the text instantly.",
-    icon: (
-      <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m6.75 12l-3-3m0 0l-3 3m3-3v6m-1.5-15H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
-      </svg>
-    ),
-  },
-  {
-    step: "2",
-    title: "Paste Job Description",
-    description: "Add the target job posting so we know what to optimize for.",
-    icon: (
-      <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
-      </svg>
-    ),
-  },
-  {
-    step: "3",
-    title: "Get Your Score",
-    description: "AI analyzes your CV and gives a detailed ATS compatibility report.",
-    icon: (
-      <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
-      </svg>
-    ),
-  },
-];
-
-const features = [
-  {
-    title: "ATS Score (0–100)",
-    description: "See exactly how well your CV matches the job posting with a precise compatibility score.",
-  },
-  {
-    title: "Keyword Analysis",
-    description: "Discover which keywords you're missing and which ones you already have covered.",
-  },
-  {
-    title: "Smart Suggestions",
-    description: "Get specific, actionable text rewrites prioritized by impact on your score.",
-  },
-  {
-    title: "Section Breakdown",
-    description: "See scores for Summary, Skills, Experience, and Education individually.",
-  },
-  {
-    title: "Improved CV Export",
-    description: "Download an AI-improved version of your CV as a ready-to-send DOCX file.",
-  },
-  {
-    title: "Privacy First",
-    description: "Your CV is processed in memory only — nothing is ever stored on our servers.",
-  },
-];
+import { useRouter } from 'next/navigation';
 
 export default function HomePage() {
   const router = useRouter();
-  const {
-    cvFile,
-    jobDescription,
-    llmProvider,
-    isAnalyzing,
-    setAnalyzing,
-    setResult,
-    setError,
-    setCvText,
-    error,
-  } = useAnalysisStore();
-
-  // Debug logging
-  useEffect(() => {
-    console.log("isAnalyzing state changed to:", isAnalyzing);
-  }, [isAnalyzing]);
-
-  const canAnalyze =
-    cvFile && jobDescription.trim().length >= 50 && !isAnalyzing;
-
-  async function handleAnalyze() {
-    if (!cvFile || !canAnalyze) return;
-
-    setAnalyzing(true);
-    setError(null);
-
-    const startTime = Date.now();
-    const minLoadingTime = 1500; // Show loading indicator for at least 1.5 seconds
-
-    try {
-      const formData = new FormData();
-      formData.append("cv", cvFile);
-      formData.append("jobDescription", jobDescription);
-      formData.append("provider", llmProvider);
-
-      const response = await fetch("/api/analyze", {
-        method: "POST",
-        body: formData,
-      });
-
-      const data = await response.json();
-
-      // Ensure minimum loading time for visibility
-      const elapsedTime = Date.now() - startTime;
-      if (elapsedTime < minLoadingTime) {
-        await new Promise(resolve => setTimeout(resolve, minLoadingTime - elapsedTime));
-      }
-
-      if (!response.ok) {
-        setError(data.error || "Analysis failed. Please try again.");
-        setAnalyzing(false);
-        return;
-      }
-
-      setResult(data);
-      if (data.improvedCv) {
-        setCvText(data.improvedCv);
-      }
-      setAnalyzing(false);
-      router.push("/results");
-    } catch (err) {
-      setError("Network error. Please check your connection and try again.");
-      setAnalyzing(false);
-    }
-  }
 
   return (
-    <main className="flex flex-1 flex-col">
-      {/* Hero Section */}
-      <section className="relative overflow-hidden border-b bg-gradient-to-br from-primary/10 via-background to-primary/5 px-4 py-20 md:py-28">
-        {/* Background decorative elements */}
-        <div className="pointer-events-none absolute inset-0 overflow-hidden">
-          <div className="absolute -right-24 -top-24 h-96 w-96 rounded-full bg-primary/5 blur-3xl" />
-          <div className="absolute -bottom-24 -left-24 h-96 w-96 rounded-full bg-primary/5 blur-3xl" />
-        </div>
-
-        <div className="relative mx-auto max-w-3xl text-center">
-          <div className="mb-4 inline-flex items-center rounded-full border bg-background/60 px-3 py-1 text-xs font-medium text-muted-foreground backdrop-blur-sm">
-            <span className="mr-1.5 inline-block h-1.5 w-1.5 rounded-full bg-green-500" />
-            AI-Powered Resume Analysis
+    <main className="min-h-screen bg-white text-gray-900 font-sans">
+      {/* Navigation Header */}
+      <header className="sticky top-0 z-50 bg-white border-b border-gray-100">
+        <nav className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+          <h1 className="text-2xl font-bold text-gray-900">ATS Checker</h1>
+          <div className="hidden sm:flex items-center gap-12">
+            <a href="#features" className="text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors">
+              Features
+            </a>
+            <a href="#how-it-works" className="text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors">
+              How it works
+            </a>
           </div>
-
-          <h1 className="text-4xl font-bold tracking-tight sm:text-5xl md:text-6xl">
-            Check Your{" "}
-            <span className="bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">
-              ATS Score
-            </span>
-          </h1>
-
-          <p className="mx-auto mt-4 max-w-xl text-lg text-muted-foreground">
-            Know exactly what ATS systems see in your CV. Get a compatibility
-            score, keyword analysis, and AI-powered improvement suggestions.
-          </p>
-
-          <a
-            href="#analyze"
-            className="mt-6 inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
+          <button
+            onClick={() => router.push('/analyze')}
+            className="px-6 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 active:bg-blue-800 transition-all duration-200 shadow-sm hover:shadow-md cursor-pointer"
           >
-            Start analyzing
-            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-            </svg>
-          </a>
-        </div>
-      </section>
+            Analyze Now
+          </button>
+        </nav>
+      </header>
 
-      {/* How It Works */}
-      <section id="how-it-works" className="border-b bg-muted/30 px-4 py-16">
-        <div className="mx-auto max-w-4xl">
-          <h2 className="mb-2 text-center text-sm font-semibold uppercase tracking-wider text-primary">
-            How It Works
+      {/* Hero Section */}
+      <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-24 sm:py-32">
+        <div className="max-w-3xl mx-auto text-center">
+          <h2 className="text-5xl sm:text-6xl lg:text-7xl font-bold tracking-tight text-gray-900 mb-6">
+            Beat the ATS
           </h2>
-          <p className="mb-10 text-center text-2xl font-bold">
-            Three simple steps to a better CV
+          <p className="text-lg sm:text-xl text-gray-600 leading-relaxed mb-10">
+            Get your resume past applicant tracking systems with AI-powered analysis. 
+            See exactly what changes boost your score.
           </p>
-
-          <div className="grid gap-6 md:grid-cols-3">
-            {steps.map((s) => (
-              <div
-                key={s.step}
-                className="relative rounded-xl border bg-background p-6 text-center shadow-sm"
-              >
-                <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
-                  {s.icon}
-                </div>
-                <h3 className="mb-1 font-semibold">{s.title}</h3>
-                <p className="text-sm text-muted-foreground">
-                  {s.description}
-                </p>
-                <span className="absolute -top-3 left-4 rounded-full bg-primary px-2.5 py-0.5 text-xs font-bold text-primary-foreground">
-                  {s.step}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Analyze Section */}
-      <section id="analyze" className="px-4 py-16">
-        <div className="mx-auto max-w-4xl">
-          <h2 className="mb-2 text-center text-sm font-semibold uppercase tracking-wider text-primary">
-            Analyze
-          </h2>
-          <p className="mb-10 text-center text-2xl font-bold">
-            Upload your CV and paste the job description
-          </p>
-
-          {/* LLM Provider Selector */}
-          <div className="mb-10">
-            <LLMProviderSelector />
-          </div>
-
-          <div className="grid gap-8 md:grid-cols-2">
-            {/* CV Upload */}
-            <div className="space-y-3">
-              <label className="text-sm font-medium">Your CV</label>
-              <UploadZone />
-            </div>
-
-            {/* Job Description */}
-            <div>
-              <JobInput />
-            </div>
-          </div>
-
-          {/* Error */}
-          {error && (
-            <div className="mt-6 rounded-lg border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm text-destructive animate-in fade-in slide-in-from-top-2 duration-300">
-              {error}
-            </div>
-          )}
-
-          {/* Loading State Indicator */}
-          {isAnalyzing && (
-            <div className="mt-6 rounded-lg border border-blue-200 bg-blue-50 px-6 py-4 text-sm text-blue-900 animate-in fade-in slide-in-from-top-2 duration-300">
-              <div className="flex items-center gap-3">
-                <div className="relative h-5 w-5 flex-shrink-0">
-                  <svg
-                    className="h-5 w-5 animate-spin text-blue-600"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                  >
-                    <circle
-                      className="opacity-25"
-                      cx="12"
-                      cy="12"
-                      r="10"
-                      stroke="currentColor"
-                      strokeWidth="4"
-                    />
-                    <path
-                      className="opacity-75"
-                      fill="currentColor"
-                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-                    />
-                  </svg>
-                </div>
-                <div className="flex-1">
-                  <div className="font-medium">Analyzing your CV...</div>
-                  <div className="text-xs opacity-75 mt-0.5">This may take a few seconds</div>
-                </div>
-              </div>
-              <div className="mt-3 h-1 w-full rounded-full bg-blue-200 overflow-hidden">
-                <div className="h-full bg-blue-600 rounded-full animate-pulse" style={{ width: "65%" }} />
-              </div>
-            </div>
-          )}
-
-          {/* Analyze Button */}
-          <div className="mt-8 flex justify-center">
+          <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <button
-              onClick={handleAnalyze}
-              disabled={!canAnalyze || isAnalyzing}
-              className={`
-                relative px-8 py-3.5 rounded-lg font-semibold text-base
-                transition-all duration-300 ease-in-out
-                flex items-center justify-center gap-2
-                border-0 outline-none
-                ${
-                  !canAnalyze || isAnalyzing
-                    ? "bg-gray-300 text-gray-500 cursor-not-allowed opacity-60"
-                    : "bg-blue-600 text-white cursor-pointer hover:bg-blue-800 active:bg-blue-900 hover:shadow-2xl hover:shadow-blue-500/50 active:scale-90 hover:-translate-y-1"
-                }
-                min-w-[240px]
-              `}
+              onClick={() => router.push('/analyze')}
+              className="px-8 py-3.5 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 active:bg-blue-800 transition-all duration-200 shadow-md hover:shadow-lg text-base cursor-pointer"
             >
-              {isAnalyzing ? (
-                <>
-                  <svg
-                    className="h-4 w-4 animate-spin flex-shrink-0"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                  >
-                    <circle
-                      className="opacity-25"
-                      cx="12"
-                      cy="12"
-                      r="10"
-                      stroke="currentColor"
-                      strokeWidth="4"
-                    />
-                    <path
-                      className="opacity-75"
-                      fill="currentColor"
-                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-                    />
-                  </svg>
-                  <span>Analyzing...</span>
-                </>
-              ) : (
-                <>
-                  <svg
-                    className="h-4 w-4 flex-shrink-0"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    strokeWidth={2}
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M13 10V3L4 14h7v7l9-11h-7z"
-                    />
-                  </svg>
-                  <span>Analyze ATS Score</span>
-                </>
-              )}
+              Start Free Analysis
+            </button>
+            <button
+              onClick={() => router.push('#features')}
+              className="px-8 py-3.5 border-2 border-gray-300 text-gray-900 font-semibold rounded-lg hover:border-gray-400 hover:bg-gray-50 transition-all duration-200 text-base cursor-pointer"
+            >
+              Learn More
             </button>
           </div>
-
-          <p className="mt-3 text-center text-xs text-muted-foreground">
-            Your CV is processed in memory and never stored on our servers.
+          <p className="text-sm text-gray-500 mt-6">
+            No credit card required. Results in under 2 seconds.
           </p>
+        </div>
+      </section>
+
+      {/* Stats Section */}
+      <section className="bg-gray-50 border-t border-b border-gray-200 py-20 sm:py-24">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-12">
+            <div className="text-center">
+              <div className="text-5xl font-bold text-blue-600 mb-3">98%</div>
+              <p className="text-base font-semibold text-gray-900 mb-1">Accuracy</p>
+              <p className="text-sm text-gray-600">Catches ATS-blocking keywords</p>
+            </div>
+            <div className="text-center">
+              <div className="text-5xl font-bold text-blue-600 mb-3">&lt;2s</div>
+              <p className="text-base font-semibold text-gray-900 mb-1">Analysis Speed</p>
+              <p className="text-sm text-gray-600">Lightning-fast results</p>
+            </div>
+            <div className="text-center">
+              <div className="text-5xl font-bold text-blue-600 mb-3">100%</div>
+              <p className="text-base font-semibold text-gray-900 mb-1">Private</p>
+              <p className="text-sm text-gray-600">No data storage</p>
+            </div>
+          </div>
         </div>
       </section>
 
       {/* Features Section */}
-      <section id="features" className="border-t bg-muted/30 px-4 py-16">
-        <div className="mx-auto max-w-4xl">
-          <h2 className="mb-2 text-center text-sm font-semibold uppercase tracking-wider text-primary">
-            Features
-          </h2>
-          <p className="mb-10 text-center text-2xl font-bold">
-            Everything you need to beat the ATS
+      <section id="features" className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-24 sm:py-32">
+        <div className="max-w-2xl mx-auto text-center mb-16">
+          <h3 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-4">
+            Comprehensive Resume Analysis
+          </h3>
+          <p className="text-lg text-gray-600">
+            Everything you need to optimize your resume for ATS systems
           </p>
+        </div>
 
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {features.map((f) => (
-              <Card key={f.title} className="shadow-sm">
-                <CardContent className="pt-6">
-                  <h3 className="mb-1 font-semibold">{f.title}</h3>
-                  <p className="text-sm text-muted-foreground">
-                    {f.description}
-                  </p>
-                </CardContent>
-              </Card>
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-8">
+          {[
+            { title: 'ATS Score', desc: 'Detailed 0-100 compatibility score' },
+            { title: 'Keyword Analysis', desc: 'Missing keywords highlighted' },
+            { title: 'Smart Suggestions', desc: 'Actionable text improvements' },
+            { title: 'Section Breakdown', desc: 'Score by resume section' },
+            { title: 'CV Export', desc: 'Download optimized DOCX file' },
+            { title: 'Privacy First', desc: 'Zero data retention' }
+          ].map((feature) => (
+            <div
+              key={feature.title}
+              className="p-6 border border-gray-200 rounded-lg hover:border-blue-300 hover:shadow-lg hover:bg-blue-50/40 transition-all duration-200"
+            >
+              <h4 className="text-lg font-semibold text-gray-900 mb-2">{feature.title}</h4>
+              <p className="text-sm text-gray-600">{feature.desc}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* How It Works */}
+      <section id="how-it-works" className="bg-gray-50 border-t border-b border-gray-200 py-24 sm:py-32">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="max-w-2xl mx-auto text-center mb-16">
+            <h3 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-4">
+              How It Works
+            </h3>
+            <p className="text-lg text-gray-600">
+              Three simple steps to better results
+            </p>
+          </div>
+
+          <div className="grid sm:grid-cols-3 gap-8">
+            {[
+              { num: '1', title: 'Upload CV', desc: 'Share your resume' },
+              { num: '2', title: 'Add Job Title', desc: 'Paste job description' },
+              { num: '3', title: 'Get Score', desc: 'Instant ATS analysis' }
+            ].map((step) => (
+              <div key={step.num} className="text-center">
+                <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-blue-600 text-white font-bold text-lg mb-4">
+                  {step.num}
+                </div>
+                <h4 className="text-lg font-semibold text-gray-900 mb-2">{step.title}</h4>
+                <p className="text-sm text-gray-600">{step.desc}</p>
+              </div>
             ))}
           </div>
         </div>
+      </section>
+
+      {/* CTA Section */}
+      <section className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 py-24 sm:py-32 text-center">
+        <h3 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-6">
+          Ready for a better resume?
+        </h3>
+        <p className="text-lg text-gray-600 mb-10 max-w-2xl mx-auto">
+          Join thousands using ATS Checker to improve their applications
+        </p>
+        <button
+          onClick={() => router.push('/analyze')}
+          className="px-8 py-3.5 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 active:bg-blue-800 transition-all duration-200 shadow-md hover:shadow-lg text-base cursor-pointer"
+        >
+          Start Analyzing Now
+        </button>
       </section>
     </main>
   );

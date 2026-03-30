@@ -44,7 +44,7 @@ export function JobInput() {
         {!isExpanded ? (
           <button
             onClick={() => setIsExpanded(true)}
-            className="w-full px-4 py-3 text-left hover:bg-muted/50 transition-colors text-sm text-muted-foreground hover:text-foreground"
+            className="w-full px-4 py-3 text-left hover:bg-muted/50 transition-colors text-sm text-muted-foreground hover:text-foreground cursor-pointer"
           >
             <div className="flex items-start justify-between gap-4">
               <div className="flex-1">
@@ -76,7 +76,7 @@ export function JobInput() {
               </div>
               <button
                 onClick={() => setIsExpanded(false)}
-                className="px-3 py-1.5 rounded-md bg-muted hover:bg-muted/80 transition-colors text-xs font-medium"
+                className="px-3 py-1.5 rounded-md bg-muted hover:bg-muted/80 transition-colors text-xs font-medium cursor-pointer"
               >
                 Collapse
               </button>

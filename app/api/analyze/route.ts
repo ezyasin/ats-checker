@@ -80,7 +80,14 @@ export async function POST(request: NextRequest) {
     try {
       const llmClient = createLLMClient(provider);
       const result = await llmClient.analyze(cvText, jobDescription);
-      return NextResponse.json(result);
+      console.log('LLM Analysis result:', {
+        hasImprovedCv: !!result.improvedCv,
+        improvedCvLength: result.improvedCv?.length,
+        originalCvLength: cvText.length,
+        atsScore: result.atsScore,
+        verdict: result.verdict,
+      });
+      return NextResponse.json({ ...result, originalCv: cvText });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown error";
 

@@ -20,6 +20,7 @@ export interface AnalysisResult {
   missingKeywords: string[];
   sectionScores: SectionScore;
   suggestions: Suggestion[];
+  originalCv: string;
   improvedCv: string;
 }
 

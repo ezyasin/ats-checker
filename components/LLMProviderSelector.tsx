@@ -51,7 +51,7 @@ export function LLMProviderSelector() {
           <button
             key={provider}
             onClick={() => setLLMProvider(provider)}
-            className={`p-3 rounded-lg border-2 transition-all text-left ${
+            className={`p-3 rounded-lg border-2 transition-all text-left cursor-pointer ${
               llmProvider === provider
                 ? "border-blue-500 bg-blue-50"
                 : "border-gray-200 bg-white hover:border-blue-300"
