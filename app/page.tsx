@@ -1,12 +1,19 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
 
 export default function HomePage() {
   const router = useRouter();
+  const [openIndex, setOpenIndex] = useState<number | null>(null);
+  const [isLoaded, setIsLoaded] = useState(false);
+
+  useEffect(() => {
+    setIsLoaded(true);
+  }, []);
 
   return (
-    <main className="min-h-screen bg-white text-gray-900 font-sans">
+    <main className="min-h-screen bg-[--bg-primary] text-[--text-primary]">
       {/* Navigation Header */}
       <header className="sticky top-0 z-50 bg-white border-b border-gray-100">
         <nav className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">

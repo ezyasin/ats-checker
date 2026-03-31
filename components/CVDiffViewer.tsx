@@ -1,62 +1,42 @@
 'use client';
 
-import { useMemo, useEffect } from 'react';
+import { useMemo, useEffect, useState } from 'react';
 
 interface CVDiffViewerProps {
-  original: string;
-  improved: string;
+  original: string | null | undefined;
+  improved: string | null | undefined;
 }
 
 function getLinesDiff(original: string, improved: string) {
-  // Handle edge cases
-  if (!original || !improved) {
+  if (typeof original !== 'string' || typeof improved !== 'string') {
     return [];
   }
-  
+
   const origLines = original.split('\n');
   const improvLines = improved.split('\n');
 
-  const diffs = [];
   const maxLen = Math.max(origLines.length, improvLines.length);
+  const diffs: Array<{ type: 'added' | 'removed' | 'unchanged'; content: string; origIdx: number; improveIdx: number }> = [];
 
-  let origIdx = 0;
-  let improveIdx = 0;
-
-  while (origIdx < origLines.length || improveIdx < improvLines.length) {
-    const origLine = origIdx < origLines.length ? origLines[origIdx] : null;
-    const improveLine = improveIdx < improvLines.length ? improvLines[improveIdx] : null;
+  for (let i = 0; i < maxLen; i++) {
+    const origLine = origLines[i] ?? '';
+    const improveLine = improvLines[i] ?? '';
 
     if (origLine === improveLine) {
-      diffs.push({ type: 'unchanged', content: origLine || '', origIdx: origIdx + 1, improveIdx: improveIdx + 1 });
-      origIdx++;
-      improveIdx++;
-    } else if (!improveLine) {
-      diffs.push({ type: 'removed', content: origLine || '', origIdx: origIdx + 1, improveIdx: -1 });
-      origIdx++;
-    } else if (!origLine) {
-      diffs.push({ type: 'added', content: improveLine || '', origIdx: -1, improveIdx: improveIdx + 1 });
-      improveIdx++;
-    } else if (origLine && improveLine) {
-      // Check if next lines match to find insertion point
-      let foundMatch = false;
-      for (let i = improveIdx + 1; i < Math.min(improveIdx + 5, improvLines.length); i++) {
-        if (origLine === improvLines[i]) {
-          // Lines were inserted
-          for (let j = improveIdx; j < i; j++) {
-            diffs.push({ type: 'added', content: improvLines[j], origIdx: -1, improveIdx: j + 1 });
-          }
-          improveIdx = i;
-          foundMatch = true;
-          break;
-        }
+      diffs.push({ type: 'unchanged', content: origLine, origIdx: i + 1, improveIdx: i + 1 });
+    } else {
+      if (origLine) {
+        diffs.push({ type: 'removed', content: origLine, origIdx: i + 1, improveIdx: -1 });
       }
-      if (!foundMatch) {
-        // Line was modified
-        diffs.push({ type: 'removed', content: origLine, origIdx: origIdx + 1, improveIdx: -1 });
-        diffs.push({ type: 'added', content: improveLine, origIdx: -1, improveIdx: improveIdx + 1 });
-        origIdx++;
-        improveIdx++;
+      if (improveLine) {
+        diffs.push({ type: 'added', content: improveLine, origIdx: -1, improveIdx: i + 1 });
       }
+    }
+
+    if (diffs.length > 2000) {
+      // Protect against extremely large diff objects that can crash browser rendering
+      diffs.push({ type: 'unchanged', content: '...diff truncated for performance...', origIdx: -1, improveIdx: -1 });
+      break;
     }
   }
 
@@ -64,24 +44,55 @@ function getLinesDiff(original: string, improved: string) {
 }
 
 export function CVDiffViewer({ original, improved }: CVDiffViewerProps) {
+  const [error, setError] = useState<string | null>(null);
+
   useEffect(() => {
+    setError(null);
     console.log('CVDiffViewer mounted with:', {
       originalLength: original?.length,
       improvedLength: improved?.length,
-      originalPreview: original?.substring(0, 100),
-      improvedPreview: improved?.substring(0, 100),
+      originalType: typeof original,
+      improvedType: typeof improved,
     });
   }, [original, improved]);
 
   if (!original || !improved) {
     return (
       <div className="text-center text-gray-500 py-8">
-        Unable to display diff - missing original or improved CV text
+        <p>Unable to display diff - missing CV text</p>
+        <p className="text-xs mt-2">Original: {original ? 'Present' : 'Missing'} | Improved: {improved ? 'Present' : 'Missing'}</p>
       </div>
     );
   }
 
-  const diffs = useMemo(() => getLinesDiff(original, improved), [original, improved]);
+  if (typeof original !== 'string' || typeof improved !== 'string') {
+    return (
+      <div className="text-center text-red-500 py-8">
+        <p>Error: Invalid CV data format</p>
+      </div>
+    );
+  }
+
+  let diffs: Array<{ type: string; content: string; origIdx: number; improveIdx: number }> = [];
+  try {
+    diffs = getLinesDiff(original, improved);
+  } catch (err) {
+    console.error('Fatal error generating diff:', err);
+    setError(String(err));
+    return (
+      <div className="text-center text-red-500 py-8">
+        <p>Error generating diff: {String(err)}</p>
+      </div>
+    );
+  }
+
+  if (!diffs || diffs.length === 0) {
+    return (
+      <div className="text-center text-gray-500 py-8">
+        <p>No changes detected between original and improved CV</p>
+      </div>
+    );
+  }
 
   const addedCount = diffs.filter(d => d.type === 'added').length;
   const removedCount = diffs.filter(d => d.type === 'removed').length;
@@ -99,11 +110,11 @@ export function CVDiffViewer({ original, improved }: CVDiffViewerProps) {
         </div>
       </div>
 
-      <div className="border border-gray-200 rounded-lg overflow-hidden bg-white">
+      <div className="border border-gray-200 rounded-lg overflow-hidden bg-white max-h-[600px] overflow-y-auto">
         <div className="divide-y divide-gray-100">
           {diffs.slice(0, 100).map((diff, idx) => (
             <div
-              key={idx}
+              key={`${idx}-${diff.type}-${diff.origIdx}`}
               className={`flex font-mono text-sm ${
                 diff.type === 'added'
                   ? 'bg-green-50 text-green-900'
@@ -124,14 +135,14 @@ export function CVDiffViewer({ original, improved }: CVDiffViewerProps) {
                 {diff.type === 'unchanged' && ' '}
               </div>
               <div className="flex-1 px-3 py-2 overflow-x-auto whitespace-pre-wrap break-words">
-                {diff.content || '\x00'}
+                {diff.content || ''}
               </div>
             </div>
           ))}
         </div>
 
         {diffs.length > 100 && (
-          <div className="p-4 text-center text-sm text-gray-600 bg-gray-50 border-t border-gray-200">
+          <div className="p-4 text-center text-sm text-gray-600 bg-gray-50 border-t border-gray-200 sticky bottom-0">
             Showing first 100 changes ({diffs.length} total)
           </div>
         )}

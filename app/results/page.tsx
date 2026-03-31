@@ -1,12 +1,14 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useAnalysisStore } from "@/store/analysis";
 import { ScoreGauge } from "@/components/ScoreGauge";
 import { KeywordBreakdown } from "@/components/KeywordBreakdown";
 import { SuggestionCard } from "@/components/SuggestionCard";
-import { SectionScores } from "@/components/SectionScores";import { CVDiffViewer } from "@/components/CVDiffViewer";import { Button } from "@/components/ui/button";
+import { SectionScores } from "@/components/SectionScores";
+import { CVDiffViewer } from "@/components/CVDiffViewer";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -20,23 +22,22 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 export default function ResultsPage() {
   const router = useRouter();
   const { result, reset } = useAnalysisStore();
+  const [activeTab, setActiveTab] = useState("suggestions");
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     if (!result) {
       router.replace("/");
     }
-    console.log('Results page - result object:', {
-      hasResult: !!result,
-      hasOriginalCv: !!result?.originalCv,
-      hasImprovedCv: !!result?.improvedCv,
-      originalCvLength: result?.originalCv?.length,
-      improvedCvLength: result?.improvedCv?.length,
-    });
   }, [result, router]);
 
-  if (!result) {
+  if (!result || !mounted) {
     return (
-      <div className="flex flex-1 items-center justify-center">
+      <div className="flex flex-1 items-center justify-center min-h-screen">
         <p className="text-muted-foreground">Loading...</p>
       </div>
     );
@@ -132,7 +133,7 @@ export default function ResultsPage() {
         <Separator className="my-8" />
 
         {/* Suggestions & Improved CV */}
-        <Tabs defaultValue="suggestions">
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList>
             <TabsTrigger value="suggestions">
               Suggestions ({result.suggestions.length})
@@ -207,15 +208,15 @@ export default function ResultsPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                {result.improvedCv ? (
-                  <ScrollArea className="h-[600px]">
-                    <div className="prose prose-sm max-w-none dark:prose-invert whitespace-pre-wrap">
+                {result.improvedCv && typeof result.improvedCv === 'string' && result.improvedCv.trim().length > 0 ? (
+                  <ScrollArea className="h-[600px] border rounded-lg p-4">
+                    <div className="whitespace-pre-wrap text-sm text-gray-800 font-mono">
                       {result.improvedCv}
                     </div>
                   </ScrollArea>
                 ) : (
                   <div className="text-center text-gray-500 py-8">
-                    No improved CV available
+                    <p>No improved CV available</p>
                   </div>
                 )}
               </CardContent>
