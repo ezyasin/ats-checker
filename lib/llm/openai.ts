@@ -4,7 +4,7 @@
 
 import OpenAI from "openai";
 import { AnalysisResponse, LLMClient } from "./types";
-import { buildAnalysisPrompt } from "../promptBuilder";
+import { buildAnalysisPrompt, buildCVOnlyAnalysisPrompt } from "../promptBuilder";
 
 export class OpenAIClient implements LLMClient {
   private client: OpenAI;
@@ -13,8 +13,10 @@ export class OpenAIClient implements LLMClient {
     this.client = new OpenAI({ apiKey });
   }
 
-  async analyze(cvText: string, jobDescription: string): Promise<AnalysisResponse> {
-    const prompt = buildAnalysisPrompt(cvText, jobDescription);
+  async analyze(cvText: string, jobDescription?: string): Promise<AnalysisResponse> {
+    const prompt = jobDescription 
+      ? buildAnalysisPrompt(cvText, jobDescription)
+      : buildCVOnlyAnalysisPrompt(cvText);
     const model = process.env.OPENAI_MODEL || "gpt-4o";
 
     const message = await this.client.chat.completions.create({

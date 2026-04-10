@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useAnalysisStore } from "@/store/analysis";
 import { UploadZone } from "@/components/UploadZone";
 import { JobInput } from "@/components/JobInput";
@@ -22,8 +22,11 @@ const styles = `
   }
 `;
 
+type AnalysisMode = "job-match" | "cv-only";
+
 export default function AnalyzePage() {
   const router = useRouter();
+  const [analysisMode, setAnalysisMode] = useState<AnalysisMode>("job-match");
   const {
     cvFile,
     jobDescription,
@@ -39,11 +42,15 @@ export default function AnalyzePage() {
     console.log("isAnalyzing state changed to:", isAnalyzing);
   }, [isAnalyzing]);
 
-  const canAnalyze =
-    cvFile && jobDescription.trim().length >= 50 && !isAnalyzing;
+  // For job-match mode: need CV and job description (50+ chars)
+  // For cv-only mode: only need CV
+  const canAnalyze = analysisMode === "job-match"
+    ? cvFile && jobDescription.trim().length >= 50 && !isAnalyzing
+    : cvFile && !isAnalyzing;
 
   async function handleAnalyze() {
-    if (!cvFile || !canAnalyze) return;
+    if (!cvFile) return;
+    if (analysisMode === "job-match" && !jobDescription.trim()) return;
 
     setError(null);
     setAnalyzing(true);
@@ -54,7 +61,9 @@ export default function AnalyzePage() {
     try {
       const formData = new FormData();
       formData.append("cv", cvFile);
-      formData.append("jobDescription", jobDescription);
+      if (analysisMode === "job-match") {
+        formData.append("jobDescription", jobDescription);
+      }
       formData.append("provider", llmProvider);
 
       const response = await fetch("/api/analyze", {
@@ -110,8 +119,37 @@ export default function AnalyzePage() {
             Analyze Your CV
           </h1>
           <p className="text-lg text-gray-600">
-            Upload your resume and job description to get your ATS compatibility score
+            Choose your analysis mode to get started
           </p>
+        </div>
+
+        {/* Mode Selector */}
+        <div className="mb-12 grid grid-cols-2 gap-4">
+          <button
+            onClick={() => setAnalysisMode("job-match")}
+            className={`p-6 rounded-lg border-2 transition-all ${
+              analysisMode === "job-match"
+                ? "border-blue-600 bg-blue-50"
+                : "border-gray-200 bg-white hover:border-gray-300"
+            }`}
+          >
+            <div className="text-2xl mb-2">🎯</div>
+            <h3 className="font-bold text-lg mb-1">Job Match</h3>
+            <p className="text-sm text-gray-600">Compare your CV against a specific job description</p>
+          </button>
+
+          <button
+            onClick={() => setAnalysisMode("cv-only")}
+            className={`p-6 rounded-lg border-2 transition-all ${
+              analysisMode === "cv-only"
+                ? "border-blue-600 bg-blue-50"
+                : "border-gray-200 bg-white hover:border-gray-300"
+            }`}
+          >
+            <div className="text-2xl mb-2">📊</div>
+            <h3 className="font-bold text-lg mb-1">CV Score</h3>
+            <p className="text-sm text-gray-600">Get your CV's ATS score and improvement areas</p>
+          </button>
         </div>
 
         {/* LLM Provider Selector */}
@@ -120,39 +158,60 @@ export default function AnalyzePage() {
         </div>
 
         {/* Main Form */}
-        <div className="grid gap-10 lg:grid-cols-2 mb-10">
-          {/* CV Upload Section */}
-          <div className="space-y-4">
-            <div className="flex items-center gap-3">
-              <div className="flex-shrink-0 w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-lg">
-                1
+        {analysisMode === "job-match" ? (
+          // Job Match Mode
+          <div className="grid gap-10 lg:grid-cols-2 mb-10">
+            {/* CV Upload Section */}
+            <div className="space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="flex-shrink-0 w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-lg">
+                  1
+                </div>
+                <div>
+                  <h2 className="text-lg font-semibold text-gray-900">Upload Your CV</h2>
+                  <p className="text-sm text-gray-600">PDF or DOCX format</p>
+                </div>
               </div>
-              <div>
-                <h2 className="text-lg font-semibold text-gray-900">Upload Your CV</h2>
-                <p className="text-sm text-gray-600">PDF or DOCX format</p>
+              <div className="mt-4">
+                <UploadZone />
               </div>
             </div>
-            <div className="mt-4">
-              <UploadZone />
-            </div>
-          </div>
 
-          {/* Job Description Section */}
-          <div className="space-y-4">
-            <div className="flex items-center gap-3">
-              <div className="flex-shrink-0 w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-lg">
-                2
+            {/* Job Description Section */}
+            <div className="space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="flex-shrink-0 w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-lg">
+                  2
+                </div>
+                <div>
+                  <h2 className="text-lg font-semibold text-gray-900">Job Description</h2>
+                  <p className="text-sm text-gray-600">Paste the target job posting</p>
+                </div>
               </div>
-              <div>
-                <h2 className="text-lg font-semibold text-gray-900">Job Description</h2>
-                <p className="text-sm text-gray-600">Paste the target job posting</p>
+              <div className="mt-4">
+                <JobInput />
               </div>
-            </div>
-            <div className="mt-4">
-              <JobInput />
             </div>
           </div>
-        </div>
+        ) : (
+          // CV Only Mode
+          <div className="max-w-md mx-auto mb-10">
+            <div className="space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="flex-shrink-0 w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-lg">
+                  1
+                </div>
+                <div>
+                  <h2 className="text-lg font-semibold text-gray-900">Upload Your CV</h2>
+                  <p className="text-sm text-gray-600">PDF or DOCX format</p>
+                </div>
+              </div>
+              <div className="mt-4">
+                <UploadZone />
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Error Alert */}
         {error && (
@@ -181,7 +240,7 @@ export default function AnalyzePage() {
               </div>
               <div className="flex-1">
                 <p className="font-semibold text-blue-900">Analyzing your CV...</p>
-                <p className="text-sm text-blue-700 mt-1">Our AI is calculating your ATS compatibility score</p>
+                <p className="text-sm text-blue-700 mt-1">Our AI is calculating your ATS score</p>
                 <div className="mt-3 h-2 bg-blue-100 rounded-full overflow-hidden relative">
                   <div className="absolute h-full bg-gradient-to-r from-transparent via-blue-600 to-transparent w-1/3 progress-bar-animate" />
                 </div>

@@ -49,3 +49,55 @@ Scoring guidelines:
 
 Be specific in suggestions. Reference exact phrases from the CV to replace. Prioritize critical improvements that would have the most impact on ATS score.`;
 }
+
+export function buildCVOnlyAnalysisPrompt(cvText: string): string {
+  return `You are an expert ATS (Applicant Tracking System) analyst with deep knowledge of resume formatting, keyword optimization, and ATS parsing. Analyze this CV for general ATS compatibility and quality.
+
+## CV:
+${cvText}
+
+## INSTRUCTIONS:
+1. Calculate a general ATS score (0-100) based on formatting, structure, keyword density, and completeness.
+2. Identify common high-value ATS keywords that are present in the CV.
+3. Identify missing high-value keywords and common phrases that would improve ATS compatibility.
+4. Score each major resume section (summary, skills, experience, education) from 0 to 100.
+5. Provide specific, actionable improvement suggestions to increase ATS score.
+6. Generate a completely improved version of the CV in markdown format.
+
+Respond ONLY with valid JSON matching this exact structure (no markdown code fences, no extra text):
+{
+  "atsScore": <number 0-100>,
+  "verdict": "<Poor | Fair | Good | Excellent>",
+  "matchedKeywords": ["keyword1", "keyword2"],
+  "missingKeywords": ["keyword1", "keyword2"],
+  "sectionScores": {
+    "summary": <number 0-100>,
+    "skills": <number 0-100>,
+    "experience": <number 0-100>,
+    "education": <number 0-100>
+  },
+  "suggestions": [
+    {
+      "priority": "<critical | important | optional>",
+      "section": "<section name>",
+      "original": "<current text from CV>",
+      "improved": "<suggested rewrite>",
+      "reason": "<why this improves ATS score>"
+    }
+  ],
+  "improvedCv": "<full improved CV in markdown format>"
+}
+
+Scoring guidelines:
+- 0-30: Poor — major formatting issues, sparse keywords, missing sections, unclear structure
+- 31-60: Fair — decent structure but missing key elements and keywords for maximum ATS optimization
+- 61-80: Good — well-structured with good keyword coverage and ATS compatibility
+- 81-100: Excellent — optimized for ATS parsing with strong keyword density and professional structure
+
+Focus on:
+- Proper use of action verbs and industry keywords
+- Clear section headings and bullet point formatting
+- Keyword density and placement
+- Missing certifications or important sections
+- Grammar and clarity improvements`;
+}

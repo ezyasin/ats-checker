@@ -13,7 +13,6 @@ export async function POST(request: NextRequest) {
     const jobDescription = formData.get("jobDescription") as string | null;
     const providerParam = formData.get("provider") as string | null;
 
-    // Determine which LLM provider to use
     let provider: LLMProvider = (providerParam as LLMProvider) || getDefaultProvider();
     const available = getAvailableProviders();
 
@@ -28,23 +27,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!jobDescription) {
-      return NextResponse.json(
-        { error: "Job description is required." },
-        { status: 400 }
-      );
+    // Validate job description only if provided
+    if (jobDescription) {
+      const jdValidation = validateJobDescription(jobDescription);
+      if (!jdValidation.valid) {
+        return NextResponse.json(
+          { error: jdValidation.error },
+          { status: 400 }
+        );
+      }
     }
 
-    // Validate job description
-    const jdValidation = validateJobDescription(jobDescription);
-    if (!jdValidation.valid) {
-      return NextResponse.json(
-        { error: jdValidation.error },
-        { status: 400 }
-      );
-    }
-
-    // Read and validate file bytes
     const buffer = await file.arrayBuffer();
     const bytesValidation = await validateFileBytes(buffer);
     if (!bytesValidation.valid) {
@@ -54,7 +47,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Extract text from file
     let cvText: string;
     try {
       if (bytesValidation.fileType === "pdf") {
@@ -76,16 +68,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Create LLM client and analyze
     try {
       const llmClient = createLLMClient(provider);
-      const result = await llmClient.analyze(cvText, jobDescription);
+      const result = await llmClient.analyze(cvText, jobDescription || undefined);
       console.log('LLM Analysis result:', {
         hasImprovedCv: !!result.improvedCv,
         improvedCvLength: result.improvedCv?.length,
         originalCvLength: cvText.length,
         atsScore: result.atsScore,
         verdict: result.verdict,
+        mode: jobDescription ? "job-match" : "cv-only",
       });
       return NextResponse.json({ ...result, originalCv: cvText });
     } catch (error) {

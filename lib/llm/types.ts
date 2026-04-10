@@ -32,5 +32,5 @@ export interface AnalysisResponse {
 }
 
 export interface LLMClient {
-  analyze(cvText: string, jobDescription: string): Promise<AnalysisResponse>;
+  analyze(cvText: string, jobDescription?: string): Promise<AnalysisResponse>;
 }

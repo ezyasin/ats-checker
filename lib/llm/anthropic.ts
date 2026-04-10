@@ -4,7 +4,7 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 import { AnalysisResponse, LLMClient } from "./types";
-import { buildAnalysisPrompt } from "../promptBuilder";
+import { buildAnalysisPrompt, buildCVOnlyAnalysisPrompt } from "../promptBuilder";
 
 export class ClaudeClient implements LLMClient {
   private client: Anthropic;
@@ -13,8 +13,10 @@ export class ClaudeClient implements LLMClient {
     this.client = new Anthropic({ apiKey });
   }
 
-  async analyze(cvText: string, jobDescription: string): Promise<AnalysisResponse> {
-    const prompt = buildAnalysisPrompt(cvText, jobDescription);
+  async analyze(cvText: string, jobDescription?: string): Promise<AnalysisResponse> {
+    const prompt = jobDescription 
+      ? buildAnalysisPrompt(cvText, jobDescription)
+      : buildCVOnlyAnalysisPrompt(cvText);
     const model = process.env.CLAUDE_MODEL || "claude-sonnet-4-20250514";
 
     const message = await this.client.messages.create({

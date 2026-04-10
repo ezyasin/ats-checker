@@ -4,7 +4,7 @@
 
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { AnalysisResponse, LLMClient } from "./types";
-import { buildAnalysisPrompt } from "../promptBuilder";
+import { buildAnalysisPrompt, buildCVOnlyAnalysisPrompt } from "../promptBuilder";
 
 export class GeminiClient implements LLMClient {
   private client: GoogleGenerativeAI;
@@ -13,8 +13,10 @@ export class GeminiClient implements LLMClient {
     this.client = new GoogleGenerativeAI(apiKey);
   }
 
-  async analyze(cvText: string, jobDescription: string): Promise<AnalysisResponse> {
-    const prompt = buildAnalysisPrompt(cvText, jobDescription);
+  async analyze(cvText: string, jobDescription?: string): Promise<AnalysisResponse> {
+    const prompt = jobDescription 
+      ? buildAnalysisPrompt(cvText, jobDescription)
+      : buildCVOnlyAnalysisPrompt(cvText);
     const model = process.env.GEMINI_MODEL || "gemini-2.5-flash";
 
     const gemini = this.client.getGenerativeModel({ model });
