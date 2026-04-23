@@ -1,16 +1,9 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
 
 export default function HomePage() {
   const router = useRouter();
-  const [openIndex, setOpenIndex] = useState<number | null>(null);
-  const [isLoaded, setIsLoaded] = useState(false);
-
-  useEffect(() => {
-    setIsLoaded(true);
-  }, []);
 
   return (
     <main className="min-h-screen bg-[--bg-primary] text-[--text-primary]">
@@ -42,8 +35,8 @@ export default function HomePage() {
             Beat the ATS
           </h2>
           <p className="text-lg sm:text-xl text-gray-600 leading-relaxed mb-10">
-            Get your resume past applicant tracking systems with AI-powered analysis. 
-            See exactly what changes boost your score.
+            Match your resume to a real job post with AI-powered analysis.
+            See exactly what changes boost your ATS score for that role.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <button
@@ -134,7 +127,7 @@ export default function HomePage() {
           <div className="grid sm:grid-cols-3 gap-8">
             {[
               { num: '1', title: 'Upload CV', desc: 'Share your resume' },
-              { num: '2', title: 'Add Job Title', desc: 'Paste job description' },
+              { num: '2', title: 'Paste Job Post', desc: 'Add the target job description' },
               { num: '3', title: 'Get Score', desc: 'Instant ATS analysis' }
             ].map((step) => (
               <div key={step.num} className="text-center">

@@ -12,7 +12,7 @@ export interface LLMConfig {
 
 export interface AnalysisResponse {
   atsScore: number;
-  verdict: "Strong Match" | "Good Match" | "Moderate Match" | "Weak Match";
+  verdict: "Poor" | "Fair" | "Good" | "Excellent";
   matchedKeywords: string[];
   missingKeywords: string[];
   sectionScores: {
@@ -25,7 +25,7 @@ export interface AnalysisResponse {
     section: string;
     priority: "critical" | "important" | "optional";
     original: string;
-    suggested: string;
+    improved: string;
     reason: string;
   }>;
   improvedCv: string;

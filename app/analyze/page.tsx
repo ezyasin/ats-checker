@@ -1,32 +1,140 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import type { LucideIcon } from "lucide-react";
+import {
+  AlertCircle,
+  BriefcaseBusiness,
+  CheckCircle2,
+  FileText,
+  LoaderCircle,
+  Sparkles,
+  Target,
+  UploadCloud,
+} from "lucide-react";
 import { useAnalysisStore } from "@/store/analysis";
+import type { AnalysisResult } from "@/types/analysis";
 import { UploadZone } from "@/components/UploadZone";
 import { JobInput } from "@/components/JobInput";
 import { LLMProviderSelector } from "@/components/LLMProviderSelector";
 
-const styles = `
-  @keyframes indeterminate-progress {
-    0% {
-      left: -100%;
-    }
-    100% {
-      left: 100%;
-    }
-  }
-  
-  .progress-bar-animate {
-    animation: indeterminate-progress 2s infinite ease-in-out;
-  }
-`;
+type AnalysisStepKey = "upload" | "parse" | "score" | "rewrite" | "finalize";
 
-type AnalysisMode = "job-match" | "cv-only";
+interface AnalysisStep {
+  key: AnalysisStepKey;
+  title: string;
+  detail: string;
+  completeAt: number;
+  icon: LucideIcon;
+}
+
+interface AnalysisProgress {
+  value: number;
+  stepKey: AnalysisStepKey;
+}
+
+const ANALYSIS_STEPS: AnalysisStep[] = [
+  {
+    key: "upload",
+    title: "Uploading your CV and job post",
+    detail: "This part uses real upload progress from your browser so you can see the request leave the page.",
+    completeAt: 36,
+    icon: UploadCloud,
+  },
+  {
+    key: "parse",
+    title: "Extracting and validating text",
+    detail: "Reading the CV, normalizing the job post, and checking ATS-friendly structure before scoring.",
+    completeAt: 58,
+    icon: FileText,
+  },
+  {
+    key: "score",
+    title: "Scoring ATS compatibility",
+    detail: "Measuring keyword coverage, section structure, and ATS readability against the target role.",
+    completeAt: 78,
+    icon: Target,
+  },
+  {
+    key: "rewrite",
+    title: "Generating targeted suggestions",
+    detail: "Drafting role-specific improvements and rewrite suggestions based on the matched and missing signals.",
+    completeAt: 92,
+    icon: Sparkles,
+  },
+  {
+    key: "finalize",
+    title: "Preparing your results",
+    detail: "Packaging the score, improved CV, and detailed recommendations for the results screen.",
+    completeAt: 100,
+    icon: CheckCircle2,
+  },
+];
+
+const INITIAL_PROGRESS: AnalysisProgress = {
+  value: 0,
+  stepKey: "upload",
+};
+
+function getStepByKey(stepKey: AnalysisStepKey) {
+  return ANALYSIS_STEPS.find((step) => step.key === stepKey) ?? ANALYSIS_STEPS[0];
+}
+
+function getProcessingStepForValue(value: number): AnalysisStepKey {
+  if (value < 58) return "parse";
+  if (value < 78) return "score";
+  if (value < 92) return "rewrite";
+  return "finalize";
+}
+
+function getNextProcessingValue(value: number) {
+  if (value < 58) return Math.min(58, value + 4);
+  if (value < 78) return Math.min(78, value + 3);
+  if (value < 92) return Math.min(92, value + 2);
+  return Math.min(98, value + 1);
+}
+
+function parseAnalysisResponse(xhr: XMLHttpRequest) {
+  if (xhr.response && typeof xhr.response === "object") {
+    return xhr.response as Record<string, unknown>;
+  }
+
+  if (!xhr.responseText) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(xhr.responseText) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+function isAnalysisResult(data: unknown): data is AnalysisResult {
+  if (!data || typeof data !== "object") {
+    return false;
+  }
+
+  const candidate = data as Record<string, unknown>;
+
+  return (
+    typeof candidate.atsScore === "number" &&
+    typeof candidate.verdict === "string" &&
+    Array.isArray(candidate.matchedKeywords) &&
+    Array.isArray(candidate.missingKeywords) &&
+    Array.isArray(candidate.suggestions) &&
+    typeof candidate.improvedCv === "string" &&
+    typeof candidate.originalCv === "string"
+  );
+}
 
 export default function AnalyzePage() {
   const router = useRouter();
-  const [analysisMode, setAnalysisMode] = useState<AnalysisMode>("job-match");
+  const xhrRef = useRef<XMLHttpRequest | null>(null);
+  const processingTimerRef = useRef<number | null>(null);
+  const shouldSuppressAbortErrorRef = useRef(false);
+  const [analysisProgress, setAnalysisProgress] = useState<AnalysisProgress>(INITIAL_PROGRESS);
   const {
     cvFile,
     jobDescription,
@@ -38,22 +146,143 @@ export default function AnalyzePage() {
     error,
   } = useAnalysisStore();
 
-  useEffect(() => {
-    console.log("isAnalyzing state changed to:", isAnalyzing);
-  }, [isAnalyzing]);
+  const canAnalyze =
+    Boolean(cvFile) && jobDescription.trim().length >= 50 && !isAnalyzing;
 
-  // For job-match mode: need CV and job description (50+ chars)
-  // For cv-only mode: only need CV
-  const canAnalyze = analysisMode === "job-match"
-    ? cvFile && jobDescription.trim().length >= 50 && !isAnalyzing
-    : cvFile && !isAnalyzing;
+  const currentStep = getStepByKey(analysisProgress.stepKey);
+  const currentStepIndex = ANALYSIS_STEPS.findIndex(
+    (step) => step.key === analysisProgress.stepKey
+  );
+
+  function clearProcessingTimer() {
+    if (processingTimerRef.current !== null) {
+      window.clearInterval(processingTimerRef.current);
+      processingTimerRef.current = null;
+    }
+  }
+
+  function resetProgress() {
+    clearProcessingTimer();
+    setAnalysisProgress(INITIAL_PROGRESS);
+  }
+
+  function startProcessingProgress() {
+    clearProcessingTimer();
+    setAnalysisProgress((current) => ({
+      value: Math.max(current.value, 40),
+      stepKey: "parse",
+    }));
+
+    processingTimerRef.current = window.setInterval(() => {
+      setAnalysisProgress((current) => {
+        if (current.value >= 98) {
+          clearProcessingTimer();
+          return current;
+        }
+
+        const nextValue = getNextProcessingValue(current.value);
+        return {
+          value: nextValue,
+          stepKey: getProcessingStepForValue(nextValue),
+        };
+      });
+    }, 450);
+  }
+
+  function submitAnalysis(formData: FormData) {
+    return new Promise<AnalysisResult>((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhrRef.current = xhr;
+      xhr.open("POST", "/api/analyze");
+      xhr.responseType = "json";
+
+      xhr.upload.addEventListener("loadstart", () => {
+        setAnalysisProgress({ value: 8, stepKey: "upload" });
+      });
+
+      xhr.upload.addEventListener("progress", (event) => {
+        if (!event.lengthComputable) return;
+
+        const nextValue = Math.max(
+          8,
+          Math.round((event.loaded / event.total) * 36)
+        );
+
+        setAnalysisProgress({
+          value: Math.min(nextValue, 36),
+          stepKey: "upload",
+        });
+      });
+
+      xhr.upload.addEventListener("loadend", () => {
+        startProcessingProgress();
+      });
+
+      xhr.onload = () => {
+        clearProcessingTimer();
+        const data = parseAnalysisResponse(xhr);
+
+        if (xhr.status >= 200 && xhr.status < 300 && isAnalysisResult(data)) {
+          resolve(data);
+          return;
+        }
+
+        const message =
+          (data && typeof data.error === "string" && data.error) ||
+          "Analysis failed. Please try again.";
+        reject(new Error(message));
+      };
+
+      xhr.onerror = () => {
+        clearProcessingTimer();
+        reject(new Error("Network error. Please check your connection and try again."));
+      };
+
+      xhr.onabort = () => {
+        clearProcessingTimer();
+        reject(new DOMException("Analysis aborted", "AbortError"));
+      };
+
+      xhr.send(formData);
+    });
+  }
+
+  function handleGoHome() {
+    if (isAnalyzing) {
+      shouldSuppressAbortErrorRef.current = true;
+      xhrRef.current?.abort();
+      setAnalyzing(false);
+      resetProgress();
+    }
+
+    router.push("/");
+  }
+
+  useEffect(() => {
+    return () => {
+      clearProcessingTimer();
+      xhrRef.current?.abort();
+    };
+  }, []);
 
   async function handleAnalyze() {
-    if (!cvFile) return;
-    if (analysisMode === "job-match" && !jobDescription.trim()) return;
+    if (!cvFile) {
+      setError("Upload your CV to continue.");
+      return;
+    }
+
+    if (jobDescription.trim().length < 50) {
+      setError("Paste a full reference job post so the ATS score has something meaningful to compare against.");
+      return;
+    }
 
     setError(null);
     setAnalyzing(true);
+    shouldSuppressAbortErrorRef.current = false;
+    setAnalysisProgress({
+      value: 4,
+      stepKey: "upload",
+    });
 
     // Scroll to top to show loading animation immediately
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -61,36 +290,41 @@ export default function AnalyzePage() {
     try {
       const formData = new FormData();
       formData.append("cv", cvFile);
-      if (analysisMode === "job-match") {
-        formData.append("jobDescription", jobDescription);
-      }
+      formData.append("jobDescription", jobDescription);
       formData.append("provider", llmProvider);
 
-      const response = await fetch("/api/analyze", {
-        method: "POST",
-        body: formData,
+      const data = await submitAnalysis(formData);
+      setAnalysisProgress({
+        value: 100,
+        stepKey: "finalize",
       });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        setError(data.error || "Analysis failed. Please try again.");
-        setAnalyzing(false);
+      await new Promise((resolve) => window.setTimeout(resolve, 220));
+      setResult(data);
+      xhrRef.current = null;
+      router.push("/results");
+    } catch (error) {
+      if (
+        error instanceof DOMException &&
+        error.name === "AbortError" &&
+        shouldSuppressAbortErrorRef.current
+      ) {
+        shouldSuppressAbortErrorRef.current = false;
         return;
       }
 
-      setResult(data);
+      setError(
+        error instanceof Error
+          ? error.message
+          : "Network error. Please check your connection and try again."
+      );
       setAnalyzing(false);
-      router.push("/results");
-    } catch (err) {
-      setError("Network error. Please check your connection and try again.");
-      setAnalyzing(false);
+      xhrRef.current = null;
+      resetProgress();
     }
   }
 
   return (
     <main className="min-h-screen bg-white text-gray-900">
-      <style>{styles}</style>
       {/* Header/Navigation */}
       <header className="sticky top-0 z-50 border-b border-gray-200 bg-white">
         <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 py-4">
@@ -103,10 +337,10 @@ export default function AnalyzePage() {
             </button>
             <div />
             <button
-              onClick={() => router.push('/')}
+              onClick={handleGoHome}
               className="px-4 py-2 text-gray-700 hover:text-gray-900 border border-gray-300 rounded-lg hover:border-gray-400 hover:shadow-sm transition-all"
             >
-              Back to Home
+              {isAnalyzing ? "Cancel and Go Home" : "Back to Home"}
             </button>
           </div>
         </div>
@@ -116,40 +350,55 @@ export default function AnalyzePage() {
         {/* Header */}
         <div className="mb-12">
           <h1 className="text-4xl sm:text-5xl font-bold mb-3">
-            Analyze Your CV
+            Analyze Your CV Against a Job Post
           </h1>
           <p className="text-lg text-gray-600">
-            Choose your analysis mode to get started
+            ATS scores only make sense in context. Upload your CV and a reference job post to get a grounded match score, keyword gaps, and rewrite suggestions.
           </p>
         </div>
 
-        {/* Mode Selector */}
-        <div className="mb-12 grid grid-cols-2 gap-4">
-          <button
-            onClick={() => setAnalysisMode("job-match")}
-            className={`p-6 rounded-lg border-2 transition-all ${
-              analysisMode === "job-match"
-                ? "border-blue-600 bg-blue-50"
-                : "border-gray-200 bg-white hover:border-gray-300"
-            }`}
-          >
-            <div className="text-2xl mb-2">🎯</div>
-            <h3 className="font-bold text-lg mb-1">Job Match</h3>
-            <p className="text-sm text-gray-600">Compare your CV against a specific job description</p>
-          </button>
+        <div className="mb-12 rounded-2xl border border-blue-200 bg-blue-50 p-6 sm:p-8">
+          <div className="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
+            <div className="max-w-2xl">
+              <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-blue-200 bg-white px-3 py-1 text-sm font-medium text-blue-700">
+                <Target className="h-4 w-4" />
+                One analysis mode
+              </div>
+              <h2 className="text-2xl font-bold text-gray-900">
+                Job-post-based ATS scoring
+              </h2>
+              <p className="mt-2 text-sm leading-6 text-gray-700">
+                The score, missing keywords, and rewritten CV are now anchored to one real opening. That prevents misleading upload-only scores that were not tied to any hiring criteria.
+              </p>
+            </div>
 
-          <button
-            onClick={() => setAnalysisMode("cv-only")}
-            className={`p-6 rounded-lg border-2 transition-all ${
-              analysisMode === "cv-only"
-                ? "border-blue-600 bg-blue-50"
-                : "border-gray-200 bg-white hover:border-gray-300"
-            }`}
-          >
-            <div className="text-2xl mb-2">📊</div>
-            <h3 className="font-bold text-lg mb-1">CV Score</h3>
-            <p className="text-sm text-gray-600">Get your CV's ATS score and improvement areas</p>
-          </button>
+            <div className="rounded-xl border border-white/80 bg-white/80 p-4 text-sm text-gray-700 shadow-sm">
+              <div className="flex items-start gap-3">
+                <AlertCircle className="mt-0.5 h-4 w-4 text-blue-600" />
+                <p>
+                  Use the actual job post you want to apply for. If you switch targets, run a fresh analysis with that new post.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-6 grid gap-3 sm:grid-cols-3">
+            <div className="rounded-xl border border-blue-100 bg-white p-4">
+              <FileText className="h-5 w-5 text-blue-700" />
+              <p className="mt-3 font-semibold text-gray-900">CV parsing</p>
+              <p className="mt-1 text-sm text-gray-600">We extract your actual resume text and check ATS readability.</p>
+            </div>
+            <div className="rounded-xl border border-blue-100 bg-white p-4">
+              <BriefcaseBusiness className="h-5 w-5 text-blue-700" />
+              <p className="mt-3 font-semibold text-gray-900">Job alignment</p>
+              <p className="mt-1 text-sm text-gray-600">Matched and missing keywords come from the pasted job post.</p>
+            </div>
+            <div className="rounded-xl border border-blue-100 bg-white p-4">
+              <Target className="h-5 w-5 text-blue-700" />
+              <p className="mt-3 font-semibold text-gray-900">Targeted rewrite</p>
+              <p className="mt-1 text-sm text-gray-600">Suggestions focus on what improves your fit for that specific role.</p>
+            </div>
+          </div>
         </div>
 
         {/* LLM Provider Selector */}
@@ -157,61 +406,37 @@ export default function AnalyzePage() {
           <LLMProviderSelector />
         </div>
 
-        {/* Main Form */}
-        {analysisMode === "job-match" ? (
-          // Job Match Mode
-          <div className="grid gap-10 lg:grid-cols-2 mb-10">
-            {/* CV Upload Section */}
-            <div className="space-y-4">
-              <div className="flex items-center gap-3">
-                <div className="flex-shrink-0 w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-lg">
-                  1
-                </div>
-                <div>
-                  <h2 className="text-lg font-semibold text-gray-900">Upload Your CV</h2>
-                  <p className="text-sm text-gray-600">PDF or DOCX format</p>
-                </div>
+        <div className="grid gap-10 lg:grid-cols-2 mb-10">
+          <div className="space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-blue-600 text-lg font-bold text-white">
+                1
               </div>
-              <div className="mt-4">
-                <UploadZone />
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900">Upload your CV</h2>
+                <p className="text-sm text-gray-600">PDF or DOCX, up to 5MB</p>
               </div>
             </div>
+            <div className="mt-4">
+              <UploadZone />
+            </div>
+          </div>
 
-            {/* Job Description Section */}
-            <div className="space-y-4">
-              <div className="flex items-center gap-3">
-                <div className="flex-shrink-0 w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-lg">
-                  2
-                </div>
-                <div>
-                  <h2 className="text-lg font-semibold text-gray-900">Job Description</h2>
-                  <p className="text-sm text-gray-600">Paste the target job posting</p>
-                </div>
+          <div className="space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-blue-600 text-lg font-bold text-white">
+                2
               </div>
-              <div className="mt-4">
-                <JobInput />
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900">Paste the reference job post</h2>
+                <p className="text-sm text-gray-600">Responsibilities, requirements, skills, and tools</p>
               </div>
             </div>
-          </div>
-        ) : (
-          // CV Only Mode
-          <div className="max-w-md mx-auto mb-10">
-            <div className="space-y-4">
-              <div className="flex items-center gap-3">
-                <div className="flex-shrink-0 w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-lg">
-                  1
-                </div>
-                <div>
-                  <h2 className="text-lg font-semibold text-gray-900">Upload Your CV</h2>
-                  <p className="text-sm text-gray-600">PDF or DOCX format</p>
-                </div>
-              </div>
-              <div className="mt-4">
-                <UploadZone />
-              </div>
+            <div className="mt-4">
+              <JobInput />
             </div>
           </div>
-        )}
+        </div>
 
         {/* Error Alert */}
         {error && (
@@ -230,21 +455,117 @@ export default function AnalyzePage() {
 
         {/* Loading State */}
         {isAnalyzing && (
-          <div className="mb-8 p-6 rounded-lg border border-blue-200 bg-blue-50">
-            <div className="flex gap-4">
-              <div className="flex-shrink-0">
-                <svg className="w-6 h-6 text-blue-600 animate-spin" viewBox="0 0 24 24" fill="none">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                </svg>
-              </div>
-              <div className="flex-1">
-                <p className="font-semibold text-blue-900">Analyzing your CV...</p>
-                <p className="text-sm text-blue-700 mt-1">Our AI is calculating your ATS score</p>
-                <div className="mt-3 h-2 bg-blue-100 rounded-full overflow-hidden relative">
-                  <div className="absolute h-full bg-gradient-to-r from-transparent via-blue-600 to-transparent w-1/3 progress-bar-animate" />
+          <div className="mb-8 rounded-2xl border border-blue-200 bg-gradient-to-br from-blue-50 via-white to-slate-100 p-6 shadow-sm">
+            <div className="flex flex-col gap-6">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                <div className="flex items-start gap-4">
+                  <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-blue-600/10 text-blue-700">
+                    <LoaderCircle className="h-6 w-6 animate-spin" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-700/80">
+                      Live analysis progress
+                    </p>
+                    <h3 className="mt-1 text-2xl font-bold text-slate-900">
+                      {currentStep.title}
+                    </h3>
+                    <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
+                      {currentStep.detail}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-blue-100 bg-white/90 px-4 py-3 shadow-sm">
+                  <div className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                    Progress
+                  </div>
+                  <div className="mt-1 text-3xl font-bold text-slate-900">
+                    {analysisProgress.value}%
+                  </div>
+                  <div className="text-xs text-slate-500">
+                    Real upload + staged server processing
+                  </div>
                 </div>
               </div>
+
+              <div
+                aria-label="Analysis progress"
+                aria-valuemax={100}
+                aria-valuemin={0}
+                aria-valuenow={analysisProgress.value}
+                className="rounded-xl border border-blue-100 bg-white/90 p-4 shadow-sm"
+                role="progressbar"
+              >
+                <div className="flex items-center justify-between gap-4">
+                  <span className="text-sm font-medium text-slate-700">
+                    {currentStep.title}
+                  </span>
+                  <span className="text-xs font-medium text-slate-500">
+                    {analysisProgress.value < 100 ? "In progress" : "Complete"}
+                  </span>
+                </div>
+                <div className="mt-3 h-3 overflow-hidden rounded-full bg-slate-200">
+                  <div
+                    className="h-full rounded-full bg-gradient-to-r from-blue-500 via-indigo-500 to-cyan-400 transition-[width] duration-500 ease-out"
+                    style={{ width: `${analysisProgress.value}%` }}
+                  />
+                </div>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+                {ANALYSIS_STEPS.map((step, index) => {
+                  const status =
+                    index < currentStepIndex
+                      ? "complete"
+                      : index === currentStepIndex
+                      ? "current"
+                      : "upcoming";
+                  const StepIcon = step.icon;
+
+                  return (
+                    <div
+                      key={step.key}
+                      className={`rounded-xl border p-4 transition-colors ${
+                        status === "complete"
+                          ? "border-emerald-200 bg-emerald-50"
+                          : status === "current"
+                          ? "border-blue-200 bg-blue-50"
+                          : "border-slate-200 bg-white/80"
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div
+                          className={`flex h-9 w-9 items-center justify-center rounded-full ${
+                            status === "complete"
+                              ? "bg-emerald-100 text-emerald-700"
+                              : status === "current"
+                              ? "bg-blue-100 text-blue-700"
+                              : "bg-slate-100 text-slate-500"
+                          }`}
+                        >
+                          <StepIcon className="h-4 w-4" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-slate-900">
+                            {step.title}
+                          </p>
+                          <p className="text-xs text-slate-500">
+                            {status === "complete"
+                              ? "Done"
+                              : status === "current"
+                              ? "Working now"
+                              : "Up next"}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <p className="text-xs text-slate-500">
+                Upload progress is measured directly. After the upload finishes, the bar advances through server-side stages and completes the moment your results are ready.
+              </p>
             </div>
           </div>
         )}
@@ -266,28 +587,28 @@ export default function AnalyzePage() {
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                 </svg>
-                <span>Analyzing...</span>
+                <span>Analyzing {analysisProgress.value}%</span>
               </>
             ) : (
               <>
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
                 </svg>
-                <span>Analyze Now</span>
+                <span>Analyze Against Job Post</span>
               </>
             )}
           </button>
           <button
-            onClick={() => router.push('/')}
+            onClick={handleGoHome}
             className="px-8 py-3 rounded-lg font-semibold text-base border-2 border-gray-300 text-gray-700 hover:border-gray-400 hover:text-gray-900 hover:bg-gray-50 transition-all duration-300"
           >
-            Back to Home
+            {isAnalyzing ? "Cancel and Go Home" : "Back to Home"}
           </button>
         </div>
 
         {/* Privacy Notice */}
         <p className="text-center text-sm text-gray-600">
-          🔒 Your CV is processed in memory and never stored on our servers.
+          🔒 Your CV and job post are processed in memory and never stored on our servers.
         </p>
       </div>
     </main>

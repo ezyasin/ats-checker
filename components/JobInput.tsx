@@ -8,11 +8,11 @@ const MAX_CHARS = 15000;
 
 export function JobInput() {
   const { jobDescription, setJobDescription } = useAnalysisStore();
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(jobDescription.length === 0);
   
   const preview = jobDescription.length > 0 
     ? jobDescription.substring(0, 150) + (jobDescription.length > 150 ? "..." : "")
-    : "Paste the job description here...";
+    : "Paste the reference job post here. ATS scoring needs a target role to compare against.";
 
   const progress = (jobDescription.length / MAX_CHARS) * 100;
   const progressColor = progress > 100 ? "bg-destructive" : progress > 80 ? "bg-yellow-500" : "bg-green-500";
@@ -24,7 +24,7 @@ export function JobInput() {
           htmlFor="job-description"
           className="text-sm font-medium"
         >
-          Job Description
+          Reference Job Post
         </label>
         <span
           className={`text-xs font-medium transition-colors ${
@@ -38,6 +38,9 @@ export function JobInput() {
           {jobDescription.length.toLocaleString()} / {MAX_CHARS.toLocaleString()}
         </span>
       </div>
+      <p className="text-xs text-muted-foreground">
+        Required for ATS scoring. Paste the responsibilities, requirements, and skills from the target role.
+      </p>
 
       {/* Collapsible Display */}
       <div className="rounded-lg border border-input bg-background">
@@ -59,7 +62,7 @@ export function JobInput() {
           <div className="space-y-3 p-4">
             <Textarea
               id="job-description"
-              placeholder="Paste the job description here..."
+              placeholder="Paste the full reference job post here..."
               value={jobDescription}
               onChange={(e) => setJobDescription(e.target.value)}
               className="min-h-[280px] resize-none"

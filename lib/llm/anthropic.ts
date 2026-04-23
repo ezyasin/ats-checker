@@ -49,17 +49,38 @@ export class ClaudeClient implements LLMClient {
     return parsed;
   }
 
-  private validateResponse(data: any): void {
-    if (typeof data.atsScore !== "number" || data.atsScore < 0 || data.atsScore > 100) {
+  private validateResponse(data: unknown): asserts data is AnalysisResponse {
+    if (!data || typeof data !== "object") {
+      throw new Error("Invalid response payload");
+    }
+
+    const candidate = data as Record<string, unknown>;
+
+    if (typeof candidate.atsScore !== "number" || candidate.atsScore < 0 || candidate.atsScore > 100) {
       throw new Error("Invalid ATS score");
     }
-    if (!Array.isArray(data.matchedKeywords) || !Array.isArray(data.missingKeywords)) {
+    if (!Array.isArray(candidate.matchedKeywords) || !Array.isArray(candidate.missingKeywords)) {
       throw new Error("Invalid keywords format");
     }
-    if (!Array.isArray(data.suggestions)) {
+    if (!Array.isArray(candidate.suggestions)) {
       throw new Error("Invalid suggestions format");
     }
-    if (typeof data.improvedCv !== "string" || data.improvedCv.length === 0) {
+    if (
+      !candidate.suggestions.every((suggestion) => {
+        if (!suggestion || typeof suggestion !== "object") return false;
+        const entry = suggestion as Record<string, unknown>;
+        return (
+          typeof entry.section === "string" &&
+          typeof entry.priority === "string" &&
+          typeof entry.original === "string" &&
+          typeof entry.improved === "string" &&
+          typeof entry.reason === "string"
+        );
+      })
+    ) {
+      throw new Error("Invalid suggestion payload");
+    }
+    if (typeof candidate.improvedCv !== "string" || candidate.improvedCv.length === 0) {
       throw new Error("Missing or invalid improvedCv in response");
     }
   }

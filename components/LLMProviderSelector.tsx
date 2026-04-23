@@ -37,7 +37,7 @@ export function LLMProviderSelector() {
         setAvailable(["claude"]);
       })
       .finally(() => setLoading(false));
-  }, []);
+  }, [llmProvider, setLLMProvider]);
 
   if (loading || available.length <= 1) {
     return null; // Don't show selector if only one provider or still loading

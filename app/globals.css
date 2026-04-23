@@ -5,9 +5,9 @@
 /* ===== PREMIUM DESIGN SYSTEM ===== */
 :root {
   /* Typography */
-  --font-display: var(--font-playfair);
-  --font-heading: var(--font-jakarta);
-  --font-body: var(--font-inter);
+  --font-display: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
+  --font-heading: "Avenir Next", "Segoe UI", "Helvetica Neue", sans-serif;
+  --font-body: Inter, "Avenir Next", "Segoe UI", "Helvetica Neue", sans-serif;
 
   /* Brand Colors */
   --brand-navy: #0F3A7D;
