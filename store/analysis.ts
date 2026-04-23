@@ -1,8 +1,14 @@
 'use client';
 
 import { create } from "zustand";
-import type { AnalysisResult } from "@/types/analysis";
+import type {
+  AnalysisResult,
+  ATSMetrics,
+  ImprovementHistoryEntry,
+} from "@/types/analysis";
 import type { LLMProvider } from "@/lib/llm/types";
+
+type EnhancedAnalysisResult = AnalysisResult;
 
 interface AnalysisState {
   // Input state
@@ -13,7 +19,7 @@ interface AnalysisState {
 
   // Analysis state
   isAnalyzing: boolean;
-  result: AnalysisResult | null;
+  result: EnhancedAnalysisResult | null;
   error: string | null;
 
   // Actions
@@ -22,9 +28,14 @@ interface AnalysisState {
   setJobDescription: (text: string) => void;
   setLLMProvider: (provider: LLMProvider) => void;
   setAnalyzing: (loading: boolean) => void;
-  setResult: (result: AnalysisResult | null) => void;
+  setResult: (result: EnhancedAnalysisResult | null) => void;
   setError: (error: string | null) => void;
   reset: () => void;
+  // New actions for ATS tracking
+  updateATSMetrics: (metrics: ATSMetrics) => void;
+  addParsingIssue: (issue: string) => void;
+  addFormattingIssue: (issue: string) => void;
+  addToImprovementHistory: (entry: ImprovementHistoryEntry) => void;
 }
 
 const initialState = {
@@ -37,17 +48,63 @@ const initialState = {
   error: null,
 };
 
+function buildHistoryEntry(result: EnhancedAnalysisResult): ImprovementHistoryEntry {
+  return {
+    date: new Date().toISOString(),
+    score: result.atsScore,
+    changes: result.suggestions.slice(0, 3).map((suggestion) => suggestion.reason),
+  };
+}
+
 export const useAnalysisStore = create<AnalysisState>((set) => ({
   ...initialState,
   setCvFile: (file) => set({ cvFile: file, error: null }),
   setCvText: (text) => set({ cvText: text }),
   setJobDescription: (text) => set({ jobDescription: text, error: null }),
   setLLMProvider: (provider) => set({ llmProvider: provider }),
-  setAnalyzing: (loading) => {
-    console.log("Setting analyzing to:", loading);
-    set({ isAnalyzing: loading });
-  },
-  setResult: (result) => set({ result, isAnalyzing: false, error: null }),
+  setAnalyzing: (loading) => set({ isAnalyzing: loading }),
+  setResult: (result) =>
+    set((state) => {
+      if (!result) {
+        return { result: null, isAnalyzing: false, error: null };
+      }
+
+      const existingHistory = state.result?.improvementHistory ?? [];
+      const nextHistory = state.result
+        ? [...existingHistory, buildHistoryEntry(state.result)]
+        : result.improvementHistory ?? [];
+
+      return {
+        result: {
+          ...result,
+          improvementHistory: nextHistory,
+        },
+        isAnalyzing: false,
+        error: null,
+      };
+    }),
   setError: (error) => set({ error, isAnalyzing: false }),
   reset: () => set(initialState),
+  // New actions for ATS tracking
+  updateATSMetrics: (metrics) => set((state) => ({
+    result: state.result ? { ...state.result, atsMetrics: metrics } : state.result
+  })),
+  addParsingIssue: (issue) => set((state) => ({
+    result: state.result ? { 
+      ...state.result, 
+      parsingIssues: [...(state.result.parsingIssues || []), issue] 
+    } : state.result
+  })),
+  addFormattingIssue: (issue) => set((state) => ({
+    result: state.result ? { 
+      ...state.result, 
+      formattingIssues: [...(state.result.formattingIssues || []), issue] 
+    } : state.result
+  })),
+  addToImprovementHistory: (entry) => set((state) => ({
+    result: state.result ? { 
+      ...state.result, 
+      improvementHistory: [...(state.result.improvementHistory || []), entry] 
+    } : state.result
+  })),
 }));

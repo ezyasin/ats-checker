@@ -1,7 +1,5 @@
 'use client';
 
-import { useMemo, useEffect, useState } from 'react';
-
 interface CVDiffViewerProps {
   original: string | null | undefined;
   improved: string | null | undefined;
@@ -44,18 +42,6 @@ function getLinesDiff(original: string, improved: string) {
 }
 
 export function CVDiffViewer({ original, improved }: CVDiffViewerProps) {
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    setError(null);
-    console.log('CVDiffViewer mounted with:', {
-      originalLength: original?.length,
-      improvedLength: improved?.length,
-      originalType: typeof original,
-      improvedType: typeof improved,
-    });
-  }, [original, improved]);
-
   if (!original || !improved) {
     return (
       <div className="text-center text-gray-500 py-8">
@@ -78,7 +64,6 @@ export function CVDiffViewer({ original, improved }: CVDiffViewerProps) {
     diffs = getLinesDiff(original, improved);
   } catch (err) {
     console.error('Fatal error generating diff:', err);
-    setError(String(err));
     return (
       <div className="text-center text-red-500 py-8">
         <p>Error generating diff: {String(err)}</p>

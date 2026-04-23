@@ -8,6 +8,10 @@ import { KeywordBreakdown } from "@/components/KeywordBreakdown";
 import { SuggestionCard } from "@/components/SuggestionCard";
 import { SectionScores } from "@/components/SectionScores";
 import { CVDiffViewer } from "@/components/CVDiffViewer";
+import { ATSMetrics } from "@/components/ATSMetrics";
+import { ATSEducationCard, QuickATSTips } from "@/components/ATSEducation";
+import { ATSOptimizedExport } from "@/components/ATSOptimizedExport";
+import { ImprovementHistory } from "@/components/ImprovementHistory";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -52,14 +56,28 @@ export default function ResultsPage() {
   const optionalCount = result.suggestions.filter(
     (s) => s.priority === "optional"
   ).length;
+  const improvedCv = result.improvedCv;
 
-  async function handleExport(format: "docx") {
+  async function handleExport(format: "docx" | "txt") {
     try {
+      if (format === "txt") {
+        const blob = new Blob([improvedCv], { type: "text/plain;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "improved-cv.txt";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        return;
+      }
+      
       const response = await fetch("/api/export", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          improvedCv: result!.improvedCv,
+          improvedCv,
           format,
         }),
       });
@@ -70,7 +88,7 @@ export default function ResultsPage() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `improved-cv.${format}`;
+      a.download = "improved-cv.docx";
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -82,7 +100,7 @@ export default function ResultsPage() {
 
   function handleStartOver() {
     reset();
-    router.push("/");
+    router.push("/analyze");
   }
 
   return (
@@ -93,7 +111,7 @@ export default function ResultsPage() {
           <div>
             <h1 className="text-2xl font-bold">Analysis Results</h1>
             <p className="text-sm text-muted-foreground">
-              Here&apos;s how your CV scores against the job description
+              Here&apos;s how your CV scores against the reference job post
             </p>
           </div>
           <div className="flex gap-2">
@@ -134,12 +152,15 @@ export default function ResultsPage() {
 
         {/* Suggestions & Improved CV */}
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList>
+          <TabsList className="grid w-full grid-cols-2 lg:grid-cols-6">
             <TabsTrigger value="suggestions">
               Suggestions ({result.suggestions.length})
             </TabsTrigger>
             <TabsTrigger value="diff">Changes Made (Diff)</TabsTrigger>
-            <TabsTrigger value="improved-cv">Improved CV</TabsTrigger>
+            <TabsTrigger value="ats-metrics">ATS Analysis</TabsTrigger>
+            <TabsTrigger value="education">ATS Tips</TabsTrigger>
+            <TabsTrigger value="export">Export</TabsTrigger>
+            <TabsTrigger value="improved-cv">CV Preview</TabsTrigger>
           </TabsList>
 
           <TabsContent value="suggestions" className="mt-6">
@@ -163,14 +184,23 @@ export default function ResultsPage() {
             </div>
 
             <div className="grid gap-4">
-              {result.suggestions
-                .sort((a, b) => {
+              {result.suggestions.length === 0 ? (
+                <Card>
+                  <CardContent className="py-8">
+                    <p className="text-center text-muted-foreground">
+                      No rewrite suggestions were returned for this run. Try analyzing again with a fuller CV or job post.
+                    </p>
+                  </CardContent>
+                </Card>
+              ) : (
+                [...result.suggestions].sort((a, b) => {
                   const order = { critical: 0, important: 1, optional: 2 };
                   return order[a.priority] - order[b.priority];
                 })
                 .map((suggestion, i) => (
                   <SuggestionCard key={i} suggestion={suggestion} />
-                ))}
+                ))
+              )}
             </div>
           </TabsContent>
 
@@ -191,6 +221,39 @@ export default function ResultsPage() {
                 )}
               </CardContent>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="ats-metrics" className="mt-6">
+            {result.atsMetrics ? (
+              <ATSMetrics 
+                metrics={result.atsMetrics} 
+                parsingIssues={result.parsingIssues}
+                formattingIssues={result.formattingIssues}
+              />
+            ) : (
+              <Card>
+                <CardContent className="py-8">
+                  <p className="text-center text-muted-foreground">
+                    ATS metrics not available for this analysis
+                  </p>
+                </CardContent>
+              </Card>
+            )}
+          </TabsContent>
+
+          <TabsContent value="education" className="mt-6 space-y-6">
+            <QuickATSTips />
+            <ATSEducationCard section="howATSWorks" />
+            <ATSEducationCard section="commonPitfalls" />
+            <ATSEducationCard section="keywordStrategy" />
+            <ATSEducationCard section="bestPractices" />
+          </TabsContent>
+
+          <TabsContent value="export" className="mt-6">
+            <ATSOptimizedExport 
+              improvedCv={result.improvedCv}
+              onExport={handleExport}
+            />
           </TabsContent>
 
           <TabsContent value="improved-cv" className="mt-6">
@@ -223,6 +286,17 @@ export default function ResultsPage() {
             </Card>
           </TabsContent>
         </Tabs>
+
+        <Separator className="my-8" />
+
+        {/* Improvement History */}
+        <div className="mt-8">
+          <h2 className="text-2xl font-bold mb-6">Your Progress</h2>
+          <ImprovementHistory 
+            currentScore={result.atsScore} 
+            history={result.improvementHistory}
+          />
+        </div>
       </div>
     </main>
   );
