@@ -18,6 +18,7 @@ import type { AnalysisResult } from "@/types/analysis";
 import { UploadZone } from "@/components/UploadZone";
 import { JobInput } from "@/components/JobInput";
 import { LLMProviderSelector } from "@/components/LLMProviderSelector";
+import { cn } from "@/lib/utils";
 
 type AnalysisStepKey = "upload" | "parse" | "score" | "rewrite" | "finalize";
 
@@ -148,6 +149,22 @@ export default function AnalyzePage() {
 
   const canAnalyze =
     Boolean(cvFile) && jobDescription.trim().length >= 50 && !isAnalyzing;
+  const trimmedJobDescription = jobDescription.trim();
+  const isCvReady = Boolean(cvFile);
+  const isJobPostReady = trimmedJobDescription.length >= 50;
+  const remainingJobChars = Math.max(50 - trimmedJobDescription.length, 0);
+  const jobCounterTone =
+    trimmedJobDescription.length === 0
+      ? "border-slate-200 bg-white text-slate-500"
+      : isJobPostReady
+        ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+        : "border-amber-200 bg-amber-50 text-amber-700";
+  const selectedProviderLabel =
+    llmProvider === "gemini"
+      ? "Gemini"
+      : llmProvider === "openai"
+        ? "OpenAI"
+        : "Claude";
 
   const currentStep = getStepByKey(analysisProgress.stepKey);
   const currentStepIndex = ANALYSIS_STEPS.findIndex(
@@ -346,18 +363,18 @@ export default function AnalyzePage() {
         </div>
       </header>
 
-      <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 py-12">
+      <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6 lg:px-8 lg:py-12">
         {/* Header */}
-        <div className="mb-12">
-          <h1 className="text-4xl sm:text-5xl font-bold mb-3">
+        <div className="mb-8 max-w-4xl">
+          <h1 className="text-balance text-4xl font-bold tracking-tight sm:text-5xl lg:text-[3.75rem]">
             Analyze Your CV Against a Job Post
           </h1>
-          <p className="text-lg text-gray-600">
+          <p className="mt-3 max-w-3xl text-lg leading-8 text-gray-600">
             ATS scores only make sense in context. Upload your CV and a reference job post to get a grounded match score, keyword gaps, and rewrite suggestions.
           </p>
         </div>
 
-        <div className="mb-12 rounded-2xl border border-blue-200 bg-blue-50 p-6 sm:p-8">
+        <div className="mb-8 rounded-[28px] border border-blue-200 bg-blue-50/80 p-5 sm:p-6">
           <div className="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
             <div className="max-w-2xl">
               <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-blue-200 bg-white px-3 py-1 text-sm font-medium text-blue-700">
@@ -382,7 +399,7 @@ export default function AnalyzePage() {
             </div>
           </div>
 
-          <div className="mt-6 grid gap-3 sm:grid-cols-3">
+          <div className="mt-5 grid gap-3 sm:grid-cols-3">
             <div className="rounded-xl border border-blue-100 bg-white p-4">
               <FileText className="h-5 w-5 text-blue-700" />
               <p className="mt-3 font-semibold text-gray-900">CV parsing</p>
@@ -406,34 +423,149 @@ export default function AnalyzePage() {
           <LLMProviderSelector />
         </div>
 
-        <div className="grid gap-10 lg:grid-cols-2 mb-10">
-          <div className="space-y-4">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-blue-600 text-lg font-bold text-white">
+        <div className="mb-10 grid items-stretch gap-6 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
+          <section className="flex h-full flex-col rounded-[28px] border border-slate-200 bg-white p-5 shadow-[0_30px_70px_-48px_rgba(15,23,42,0.45)] sm:p-6">
+            <div className="flex items-start gap-4">
+              <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-blue-600 text-lg font-bold text-white">
                 1
               </div>
               <div>
-                <h2 className="text-lg font-semibold text-gray-900">Upload your CV</h2>
-                <p className="text-sm text-gray-600">PDF or DOCX, up to 5MB</p>
+                <h2 className="text-xl font-semibold text-slate-900">
+                  Upload your CV
+                </h2>
+                <p className="mt-1 text-sm text-slate-600">
+                  Add the resume version you actually want to evaluate for this role.
+                </p>
               </div>
             </div>
-            <div className="mt-4">
-              <UploadZone />
-            </div>
-          </div>
 
-          <div className="space-y-4">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-blue-600 text-lg font-bold text-white">
+            <div className="mt-6 flex items-center justify-between gap-4 rounded-2xl bg-slate-50 px-4 py-3">
+              <div>
+                <p className="text-sm font-semibold text-slate-900">CV file</p>
+                <p className="text-xs text-slate-500">
+                  One clean PDF or DOCX file, up to 5MB.
+                </p>
+              </div>
+              <span className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600">
+                PDF or DOCX
+              </span>
+            </div>
+
+            <div className="mt-4 flex-1">
+              <UploadZone className="min-h-[360px]" />
+            </div>
+
+            <p className="mt-4 text-sm leading-6 text-slate-500">
+              If you want to compare multiple resume versions, replace the file and run a fresh analysis for the same target role.
+            </p>
+          </section>
+
+          <section className="flex h-full flex-col rounded-[28px] border border-slate-200 bg-white p-5 shadow-[0_30px_70px_-48px_rgba(15,23,42,0.45)] sm:p-6">
+            <div className="flex items-start gap-4">
+              <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-blue-600 text-lg font-bold text-white">
                 2
               </div>
               <div>
-                <h2 className="text-lg font-semibold text-gray-900">Paste the reference job post</h2>
-                <p className="text-sm text-gray-600">Responsibilities, requirements, skills, and tools</p>
+                <h2 className="text-xl font-semibold text-slate-900">
+                  Paste the reference job post
+                </h2>
+                <p className="mt-1 text-sm text-slate-600">
+                  Include responsibilities, requirements, tools, and any must-have skills.
+                </p>
               </div>
             </div>
-            <div className="mt-4">
-              <JobInput />
+
+            <div className="mt-6 flex items-center justify-between gap-4 rounded-2xl bg-slate-50 px-4 py-3">
+              <div>
+                <p className="text-sm font-semibold text-slate-900">
+                  Reference job post
+                </p>
+                <p className="text-xs text-slate-500">
+                  ATS scoring needs one real role as the comparison target.
+                </p>
+              </div>
+              <span
+                className={cn(
+                  "inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold",
+                  jobCounterTone
+                )}
+              >
+                {trimmedJobDescription.length.toLocaleString()} / 15,000
+              </span>
+            </div>
+
+            <div className="mt-4 flex-1">
+              <JobInput className="h-full" showHeader={false} />
+            </div>
+
+            <p className="mt-4 text-sm leading-6 text-slate-500">
+              Use the exact posting you plan to apply for. If you switch roles, run the analysis again with that new post.
+            </p>
+          </section>
+        </div>
+
+        <div className="mb-10 grid gap-3 md:grid-cols-3">
+          <div
+            className={cn(
+              "rounded-2xl border p-4",
+              isCvReady ? "border-emerald-200 bg-emerald-50" : "border-slate-200 bg-slate-50"
+            )}
+          >
+            <div className="flex items-start gap-3">
+              {isCvReady ? (
+                <CheckCircle2 className="mt-0.5 h-5 w-5 text-emerald-600" />
+              ) : (
+                <AlertCircle className="mt-0.5 h-5 w-5 text-slate-500" />
+              )}
+              <div>
+                <p className="text-sm font-semibold text-slate-900">CV ready</p>
+                <p className="mt-1 text-sm leading-6 text-slate-600">
+                  {isCvReady
+                    ? cvFile?.name
+                    : "Upload one CV file before starting the analysis."}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div
+            className={cn(
+              "rounded-2xl border p-4",
+              isJobPostReady
+                ? "border-emerald-200 bg-emerald-50"
+                : "border-amber-200 bg-amber-50"
+            )}
+          >
+            <div className="flex items-start gap-3">
+              {isJobPostReady ? (
+                <CheckCircle2 className="mt-0.5 h-5 w-5 text-emerald-600" />
+              ) : (
+                <AlertCircle className="mt-0.5 h-5 w-5 text-amber-600" />
+              )}
+              <div>
+                <p className="text-sm font-semibold text-slate-900">
+                  Job post ready
+                </p>
+                <p className="mt-1 text-sm leading-6 text-slate-600">
+                  {isJobPostReady
+                    ? "The reference job post is long enough for grounded ATS scoring."
+                    : `Add at least ${remainingJobChars} more characters so the score has enough hiring context.`}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <div className="flex items-start gap-3">
+              <Sparkles className="mt-0.5 h-5 w-5 text-blue-600" />
+              <div>
+                <p className="text-sm font-semibold text-slate-900">
+                  Selected model
+                </p>
+                <p className="mt-1 text-sm leading-6 text-slate-600">
+                  {selectedProviderLabel} will handle this run. Keep the provider fixed if you want consistent comparisons between iterations.
+                </p>
+              </div>
             </div>
           </div>
         </div>
@@ -607,9 +739,10 @@ export default function AnalyzePage() {
         </div>
 
         {/* Privacy Notice */}
-        <p className="text-center text-sm text-gray-600">
-          🔒 Your CV and job post are processed in memory and never stored on our servers.
-        </p>
+        <div className="flex items-center justify-center gap-2 text-center text-sm text-gray-600">
+          <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+          <p>Your CV and job post are processed in memory for analysis and are not stored as saved uploads.</p>
+        </div>
       </div>
     </main>
   );

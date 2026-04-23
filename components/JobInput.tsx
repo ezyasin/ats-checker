@@ -2,75 +2,124 @@
 
 import { useState } from "react";
 import { useAnalysisStore } from "@/store/analysis";
+import { cn } from "@/lib/utils";
 import { Textarea } from "@/components/ui/textarea";
 
 const MAX_CHARS = 15000;
 
-export function JobInput() {
+interface JobInputProps {
+  className?: string;
+  showHeader?: boolean;
+}
+
+export function JobInput({ className, showHeader = true }: JobInputProps) {
   const { jobDescription, setJobDescription } = useAnalysisStore();
   const [isExpanded, setIsExpanded] = useState(jobDescription.length === 0);
-  
-  const preview = jobDescription.length > 0 
+
+  const preview = jobDescription.length > 0
     ? jobDescription.substring(0, 150) + (jobDescription.length > 150 ? "..." : "")
     : "Paste the reference job post here. ATS scoring needs a target role to compare against.";
 
   const progress = (jobDescription.length / MAX_CHARS) * 100;
-  const progressColor = progress > 100 ? "bg-destructive" : progress > 80 ? "bg-yellow-500" : "bg-green-500";
+  const progressColor =
+    progress > 100
+      ? "bg-destructive"
+      : progress > 80
+        ? "bg-amber-500"
+        : "bg-blue-600";
+  const counterTone =
+    jobDescription.length > MAX_CHARS
+      ? "border-red-200 bg-red-50 text-red-700"
+      : jobDescription.length > 0
+        ? "border-blue-200 bg-blue-50 text-blue-700"
+        : "border-slate-200 bg-white text-slate-500";
+  const helperText =
+    jobDescription.length >= 300
+      ? "Good detail level. Double-check that required tools, scope, and seniority are all included."
+      : "Paste enough of the post to capture responsibilities, tools, and must-have skills.";
 
   return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between">
-        <label
-          htmlFor="job-description"
-          className="text-sm font-medium"
-        >
-          Reference Job Post
-        </label>
-        <span
-          className={`text-xs font-medium transition-colors ${
-            jobDescription.length > MAX_CHARS
-              ? "text-destructive"
-              : jobDescription.length > 0
-              ? "text-green-600"
-              : "text-muted-foreground"
-          }`}
-        >
-          {jobDescription.length.toLocaleString()} / {MAX_CHARS.toLocaleString()}
-        </span>
-      </div>
-      <p className="text-xs text-muted-foreground">
-        Required for ATS scoring. Paste the responsibilities, requirements, and skills from the target role.
-      </p>
+    <div className={cn("flex h-full flex-col gap-3", className)}>
+      {showHeader && (
+        <>
+          <div className="flex items-center justify-between gap-3">
+            <label
+              htmlFor="job-description"
+              className="text-sm font-semibold text-slate-900"
+            >
+              Reference Job Post
+            </label>
+            <span
+              className={cn(
+                "inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold transition-colors",
+                counterTone
+              )}
+            >
+              {jobDescription.length.toLocaleString()} / {MAX_CHARS.toLocaleString()}
+            </span>
+          </div>
+          <p className="text-xs leading-5 text-muted-foreground">
+            Required for ATS scoring. Paste the responsibilities, requirements, and skills from the target role.
+          </p>
+        </>
+      )}
 
-      {/* Collapsible Display */}
-      <div className="rounded-lg border border-input bg-background">
+      <div className="flex h-full flex-col rounded-[24px] border border-slate-200 bg-slate-50/80 p-4 shadow-sm">
         {!isExpanded ? (
           <button
+            type="button"
             onClick={() => setIsExpanded(true)}
-            className="w-full px-4 py-3 text-left hover:bg-muted/50 transition-colors text-sm text-muted-foreground hover:text-foreground cursor-pointer"
+            className="flex min-h-[320px] w-full flex-1 flex-col justify-between rounded-[18px] border border-dashed border-slate-200 bg-white p-5 text-left transition-colors hover:border-blue-300 hover:bg-blue-50/50"
           >
             <div className="flex items-start justify-between gap-4">
-              <div className="flex-1">
-                <div className="line-clamp-2 text-foreground font-medium">{preview}</div>
+              <div className="space-y-2">
+                <p className="text-sm font-semibold text-slate-900">
+                  Current job post
+                </p>
+                <div className="line-clamp-5 text-sm leading-6 text-slate-600">
+                  {preview}
+                </div>
               </div>
-              <svg className="h-5 w-5 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-              </svg>
+              <span className="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">
+                Expand editor
+              </span>
+            </div>
+            <div className="flex items-center justify-between gap-4 text-xs text-slate-500">
+              <span>
+                Review or replace the pasted job post before running a new analysis.
+              </span>
+              <span className="font-semibold text-slate-700">
+                {jobDescription.length.toLocaleString()} characters
+              </span>
             </div>
           </button>
         ) : (
-          <div className="space-y-3 p-4">
+          <div className="flex h-full flex-col gap-4">
             <Textarea
               id="job-description"
               placeholder="Paste the full reference job post here..."
               value={jobDescription}
               onChange={(e) => setJobDescription(e.target.value)}
-              className="min-h-[280px] resize-none"
+              className="min-h-[320px] flex-1 resize-none rounded-[20px] border-slate-200 bg-white px-4 py-4 text-[15px] leading-7 shadow-sm"
+              aria-label={showHeader ? undefined : "Reference job post"}
               autoFocus
             />
-            <div className="flex items-center justify-between gap-4">
-              <div className="flex-1">
-                <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex-1 space-y-2">
+                <div className="flex items-center justify-between gap-3 text-xs text-slate-500">
+                  <span>{helperText}</span>
+                  {!showHeader && (
+                    <span
+                      className={cn(
+                        "inline-flex items-center rounded-full border px-2.5 py-1 font-semibold transition-colors",
+                        counterTone
+                      )}
+                    >
+                      {jobDescription.length.toLocaleString()} / {MAX_CHARS.toLocaleString()}
+                    </span>
+                  )}
+                </div>
+                <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200">
                   <div
                     className={`h-full ${progressColor} transition-all duration-300`}
                     style={{ width: `${Math.min(progress, 100)}%` }}
@@ -78,8 +127,9 @@ export function JobInput() {
                 </div>
               </div>
               <button
+                type="button"
                 onClick={() => setIsExpanded(false)}
-                className="px-3 py-1.5 rounded-md bg-muted hover:bg-muted/80 transition-colors text-xs font-medium cursor-pointer"
+                className="inline-flex items-center justify-center rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 transition-colors hover:border-slate-300 hover:bg-slate-100"
               >
                 Collapse
               </button>
