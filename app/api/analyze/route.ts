@@ -227,17 +227,6 @@ export async function POST(request: NextRequest) {
         improvementHistory: [],
       };
 
-      console.log('Enhanced Analysis result:', {
-        hasImprovedCv: !!enhancedResult.improvedCv,
-        improvedCvLength: enhancedResult.improvedCv?.length,
-        originalCvLength: cvText.length,
-        atsScore: enhancedResult.atsScore,
-        verdict: enhancedResult.verdict,
-        parsingScore: parsingResult.score,
-        formattingScore: formattingResult.score,
-        mode: "job-match",
-      });
-
       return NextResponse.json({ ...enhancedResult, originalCv: cvText });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown error";
@@ -266,14 +255,12 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      console.error(`${provider} analysis error:`, error);
       return NextResponse.json(
         { error: `Failed to analyze with ${provider}. Please try again.` },
         { status: 502 }
       );
     }
-  } catch (error) {
-    console.error("Analysis error:", error);
+  } catch {
     return NextResponse.json(
       { error: "An unexpected error occurred during analysis." },
       { status: 500 }

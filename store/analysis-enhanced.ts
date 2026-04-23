@@ -59,10 +59,7 @@ export const useAnalysisStore = create<AnalysisState>((set) => ({
   setCvText: (text) => set({ cvText: text }),
   setJobDescription: (text) => set({ jobDescription: text, error: null }),
   setLLMProvider: (provider) => set({ llmProvider: provider }),
-  setAnalyzing: (loading) => {
-    console.log("Setting analyzing to:", loading);
-    set({ isAnalyzing: loading });
-  },
+  setAnalyzing: (loading) => set({ isAnalyzing: loading }),
   setResult: (result) => set({ result, isAnalyzing: false, error: null }),
   setError: (error) => set({ error, isAnalyzing: false }),
   reset: () => set(initialState),

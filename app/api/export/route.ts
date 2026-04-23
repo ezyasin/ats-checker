@@ -100,8 +100,7 @@ export async function POST(request: NextRequest) {
         "Content-Disposition": 'attachment; filename="improved-cv.docx"',
       },
     });
-  } catch (error) {
-    console.error("Export error:", error);
+  } catch {
     return NextResponse.json(
       { error: "Failed to generate document." },
       { status: 500 }

@@ -32,8 +32,7 @@ export function LLMProviderSelector() {
           setLLMProvider(data.default);
         }
       })
-      .catch((error) => {
-        console.error("Failed to fetch providers:", error);
+      .catch(() => {
         setAvailable(["claude"]);
       })
       .finally(() => setLoading(false));

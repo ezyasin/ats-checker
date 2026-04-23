@@ -63,7 +63,6 @@ export function CVDiffViewer({ original, improved }: CVDiffViewerProps) {
   try {
     diffs = getLinesDiff(original, improved);
   } catch (err) {
-    console.error('Fatal error generating diff:', err);
     return (
       <div className="text-center text-red-500 py-8">
         <p>Error generating diff: {String(err)}</p>
