@@ -443,11 +443,11 @@ export default function AnalyzePage() {
               <div>
                 <p className="text-sm font-semibold text-slate-900">CV file</p>
                 <p className="text-xs text-slate-500">
-                  One clean PDF or DOCX file, up to 5MB.
+                  One clean PDF, DOCX, or TEX file, up to 5MB.
                 </p>
               </div>
               <span className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600">
-                PDF or DOCX
+                PDF, DOCX, or TEX
               </span>
             </div>
 

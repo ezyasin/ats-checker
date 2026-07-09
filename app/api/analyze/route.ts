@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { extractTextFromPdf } from "@/lib/parsers/pdf";
 import { extractTextFromDocx } from "@/lib/parsers/docx";
+import { extractTextFromLatex } from "@/lib/parsers/latex";
 import { validateFileBytes, validateJobDescription } from "@/lib/validators";
 import { createLLMClient, getAvailableProviders, getDefaultProvider } from "@/lib/llm/factory";
 import type { LLMProvider } from "@/lib/llm/types";
@@ -179,12 +180,14 @@ export async function POST(request: NextRequest) {
     try {
       if (bytesValidation.fileType === "pdf") {
         cvText = await extractTextFromPdf(buffer);
+      } else if (bytesValidation.fileType === "latex") {
+        cvText = await extractTextFromLatex(buffer);
       } else {
         cvText = await extractTextFromDocx(buffer);
       }
     } catch {
       return NextResponse.json(
-        { error: "Failed to parse the uploaded file. Please ensure it is a valid PDF or DOCX." },
+        { error: "Failed to parse the uploaded file. Please ensure it is a valid PDF, DOCX, or TEX file." },
         { status: 422 }
       );
     }
