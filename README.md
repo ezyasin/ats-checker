@@ -22,13 +22,13 @@ These screenshots reflect the current job-post-based flow: upload a CV, paste a 
 
 ## What The App Does
 
-- Upload a PDF or DOCX CV
+- Upload a PDF, DOCX, or LaTeX (.tex) CV
 - Paste a reference job post
 - Run analysis with Claude, Gemini, or OpenAI
 - Show ATS score, verdict, keyword gaps, and section scores
 - Generate rewrite suggestions and an improved CV
 - Show a CV diff, ATS education, ATS metrics, and export tools
-- Export the optimized CV as DOCX or plain text
+- Export the optimized CV as DOCX, LaTeX (.tex), or plain text
 
 ## Main Features
 
@@ -106,9 +106,9 @@ At least one provider key is required.
 
 ## Supported Inputs And Outputs
 
-- Input formats: PDF, DOCX
+- Input formats: PDF, DOCX, LaTeX (.tex)
 - Default upload size limit: 5 MB
-- Output formats: DOCX, plain text
+- Output formats: DOCX, LaTeX (.tex), plain text
 
 ## Available Scripts
 

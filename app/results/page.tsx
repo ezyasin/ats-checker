@@ -58,7 +58,7 @@ export default function ResultsPage() {
   ).length;
   const improvedCv = result.improvedCv;
 
-  async function handleExport(format: "docx" | "txt") {
+  async function handleExport(format: "docx" | "txt" | "tex") {
     try {
       if (format === "txt") {
         const blob = new Blob([improvedCv], { type: "text/plain;charset=utf-8" });
@@ -72,7 +72,7 @@ export default function ResultsPage() {
         URL.revokeObjectURL(url);
         return;
       }
-      
+
       const response = await fetch("/api/export", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -88,7 +88,7 @@ export default function ResultsPage() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = "improved-cv.docx";
+      a.download = format === "tex" ? "improved-cv.tex" : "improved-cv.docx";
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);

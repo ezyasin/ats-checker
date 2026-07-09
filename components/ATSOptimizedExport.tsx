@@ -7,7 +7,7 @@ import { Download, Copy, CheckCircle, AlertTriangle } from "lucide-react";
 import { useEffect, useState } from "react";
 
 interface ExportOption {
-  id: "docx" | "txt";
+  id: "docx" | "txt" | "tex";
   name: string;
   description: string;
   icon: string;
@@ -16,7 +16,7 @@ interface ExportOption {
 
 interface ATSOptimizedExportProps {
   improvedCv: string;
-  onExport?: (format: "docx" | "txt") => void;
+  onExport?: (format: "docx" | "txt" | "tex") => void;
 }
 
 const exportOptions: ExportOption[] = [
@@ -26,6 +26,12 @@ const exportOptions: ExportOption[] = [
     description: "Word format with clean structure for uploads that expect a resume file",
     icon: "📝",
     recommended: true,
+  },
+  {
+    id: "tex",
+    name: "LaTeX (.tex)",
+    description: "Clean single-column LaTeX source you can compile with Overleaf or a local TeX install",
+    icon: "📄",
   },
   {
     id: "txt",
@@ -94,7 +100,7 @@ export function ATSOptimizedExport({ improvedCv, onExport }: ATSOptimizedExportP
     }
   };
 
-  const handleExport = (format: "docx" | "txt") => {
+  const handleExport = (format: "docx" | "txt" | "tex") => {
     onExport?.(format);
   };
 

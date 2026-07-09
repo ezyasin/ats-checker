@@ -36,6 +36,9 @@ export function UploadZone({ className }: UploadZoneProps) {
       "application/pdf": [".pdf"],
       "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
         [".docx"],
+      "application/x-tex": [".tex"],
+      "text/x-tex": [".tex"],
+      "text/plain": [".tex"],
     },
     maxFiles: 1,
     maxSize: 5 * 1024 * 1024,
@@ -92,7 +95,7 @@ export function UploadZone({ className }: UploadZoneProps) {
                 : "Drag & drop your CV here"}
             </p>
             <p className="text-sm leading-6 text-muted-foreground">
-              Supports PDF and DOCX (max 5MB)
+              Supports PDF, DOCX, and TEX (max 5MB)
             </p>
             <p className="text-xs font-medium uppercase tracking-[0.18em] text-slate-500">
               or click to browse from your computer

@@ -6,6 +6,7 @@ import {
   TextRun,
   HeadingLevel,
 } from "docx";
+import { generateLatex } from "@/lib/exporters/latex";
 
 export async function POST(request: NextRequest) {
   try {
@@ -18,11 +19,22 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (format !== "docx") {
+    if (format !== "docx" && format !== "tex") {
       return NextResponse.json(
-        { error: "Only DOCX format is currently supported." },
+        { error: "Only DOCX or TEX format is currently supported." },
         { status: 400 }
       );
+    }
+
+    if (format === "tex") {
+      const tex = generateLatex(improvedCv);
+      return new NextResponse(tex, {
+        status: 200,
+        headers: {
+          "Content-Type": "text/x-tex; charset=utf-8",
+          "Content-Disposition": 'attachment; filename="improved-cv.tex"',
+        },
+      });
     }
 
     // Parse markdown-like content into docx paragraphs

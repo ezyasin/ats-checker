@@ -52,5 +52,5 @@ export interface AnalysisRequest {
 
 export interface ExportRequest {
   improvedCv: string;
-  format: "docx" | "txt";
+  format: "docx" | "txt" | "tex";
 }
