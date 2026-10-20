@@ -65,4 +65,4 @@ The LLM reads the job post and extracts structured requirements. Plain TypeScrip
 - [ ] Browser extension: score a LinkedIn or Indeed job post against a saved CV in one click
 - [ ] Non-English CVs: section headers and degree names (e.g. Turkish "Deneyim", "Lisans")
 - [ ] Deploy (Cloudflare or Vercel). `proxy.ts` already rate-limits `/api/analyze`, but in memory, like the requirements cache. Both need a shared store (KV or Redis) once there's more than one server instance
-- [ ] Show progress for the two LLM steps (extraction, rewrite) in the analyze page instead of a timed animation
+- [x] Show progress for the two LLM steps (extraction, rewrite) in the analyze page instead of a timed animation. The API streams each step as it starts, and the first score appears before the rewrite finishes
