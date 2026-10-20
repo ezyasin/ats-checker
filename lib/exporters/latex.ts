@@ -1,3 +1,5 @@
+import { parseCvMarkdown, type InlineSpan } from "@/lib/cvMarkdown";
+
 function escapeLatex(text: string): string {
   return text
     .replace(/\\/g, "\\textbackslash{}")
@@ -12,15 +14,9 @@ function escapeLatex(text: string): string {
     .replace(/~/g, "\\~{}");
 }
 
-function formatInline(text: string): string {
-  const parts = text.split(/(\*\*[^*]+\*\*)/g);
-  return parts
-    .map((part) => {
-      if (/^\*\*[^*]+\*\*$/.test(part)) {
-        return `\\textbf{${escapeLatex(part.slice(2, -2))}}`;
-      }
-      return escapeLatex(part);
-    })
+function formatSpans(spans: InlineSpan[]): string {
+  return spans
+    .map((span) => (span.bold ? `\\textbf{${escapeLatex(span.text)}}` : escapeLatex(span.text)))
     .join("");
 }
 
@@ -29,12 +25,11 @@ function formatInline(text: string): string {
  * markdown-like structure (the same headings/bullets the DOCX exporter parses).
  *
  * The first `# ` heading is rendered as a centered bold name title; subsequent
- * `# `/`## ` become `\section*`; `### ` becomes `\subsection*`; `- `/`* ` list
- * items become an `itemize`; `**bold**` becomes `\textbf`. LaTeX special
+ * `# `/`## ` become `\section*`; `### ` becomes `\subsection*`; bullets
+ * become an `itemize`; `**bold**` becomes `\textbf`. LaTeX special
  * characters are escaped in user content.
  */
 export function generateLatex(improvedCv: string): string {
-  const lines = improvedCv.split("\n");
   const body: string[] = [];
   let inItemize = false;
   let nameEmitted = false;
@@ -46,51 +41,38 @@ export function generateLatex(improvedCv: string): string {
     }
   };
 
-  for (const rawLine of lines) {
-    const trimmed = rawLine.trim();
-
-    if (!trimmed) {
+  for (const block of parseCvMarkdown(improvedCv)) {
+    if (block.type === "blank") {
       closeItemize();
       continue;
     }
 
-    if (trimmed.startsWith("# ")) {
+    const content = formatSpans(block.spans);
+
+    if (block.type === "heading") {
       closeItemize();
-      const content = trimmed.slice(2);
-      if (!nameEmitted) {
-        body.push(
-          `\\begin{center}{\\Large \\textbf{${formatInline(content)}}}\\end{center}`
-        );
+      if (block.level === 1 && !nameEmitted) {
+        body.push(`\\begin{center}{\\Large \\textbf{${content}}}\\end{center}`);
         nameEmitted = true;
+      } else if (block.level === 3) {
+        body.push(`\\subsection*{${content}}`);
       } else {
-        body.push(`\\section*{${formatInline(content)}}`);
+        body.push(`\\section*{${content}}`);
       }
       continue;
     }
 
-    if (trimmed.startsWith("## ")) {
-      closeItemize();
-      body.push(`\\section*{${formatInline(trimmed.slice(3))}}`);
-      continue;
-    }
-
-    if (trimmed.startsWith("### ")) {
-      closeItemize();
-      body.push(`\\subsection*{${formatInline(trimmed.slice(4))}}`);
-      continue;
-    }
-
-    if (trimmed.startsWith("- ") || trimmed.startsWith("* ")) {
+    if (block.type === "bullet") {
       if (!inItemize) {
         body.push("\\begin{itemize}");
         inItemize = true;
       }
-      body.push(`  \\item ${formatInline(trimmed.slice(2))}`);
+      body.push(`  \\item ${content}`);
       continue;
     }
 
     closeItemize();
-    body.push(formatInline(trimmed));
+    body.push(content);
     body.push("");
   }
 

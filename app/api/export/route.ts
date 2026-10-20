@@ -1,11 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import {
-  Document,
-  Packer,
-  Paragraph,
-  TextRun,
-  HeadingLevel,
-} from "docx";
+import { generateDocx } from "@/lib/exporters/docx";
 import { generateLatex } from "@/lib/exporters/latex";
 
 export async function POST(request: NextRequest) {
@@ -37,72 +31,7 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Parse markdown-like content into docx paragraphs
-    const lines = improvedCv.split("\n");
-    const paragraphs: Paragraph[] = [];
-
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed) {
-        paragraphs.push(new Paragraph({ text: "" }));
-        continue;
-      }
-
-      if (trimmed.startsWith("# ")) {
-        paragraphs.push(
-          new Paragraph({
-            text: trimmed.replace(/^# /, ""),
-            heading: HeadingLevel.HEADING_1,
-          })
-        );
-      } else if (trimmed.startsWith("## ")) {
-        paragraphs.push(
-          new Paragraph({
-            text: trimmed.replace(/^## /, ""),
-            heading: HeadingLevel.HEADING_2,
-          })
-        );
-      } else if (trimmed.startsWith("### ")) {
-        paragraphs.push(
-          new Paragraph({
-            text: trimmed.replace(/^### /, ""),
-            heading: HeadingLevel.HEADING_3,
-          })
-        );
-      } else if (trimmed.startsWith("- ") || trimmed.startsWith("* ")) {
-        paragraphs.push(
-          new Paragraph({
-            children: [
-              new TextRun({ text: `• ${trimmed.slice(2)}` }),
-            ],
-          })
-        );
-      } else if (trimmed.startsWith("**") && trimmed.endsWith("**")) {
-        paragraphs.push(
-          new Paragraph({
-            children: [
-              new TextRun({
-                text: trimmed.replace(/\*\*/g, ""),
-                bold: true,
-              }),
-            ],
-          })
-        );
-      } else {
-        paragraphs.push(
-          new Paragraph({
-            children: [new TextRun({ text: trimmed })],
-          })
-        );
-      }
-    }
-
-    const doc = new Document({
-      sections: [{ children: paragraphs }],
-    });
-
-    const buffer = await Packer.toBuffer(doc);
-    const uint8 = new Uint8Array(buffer);
+    const uint8 = await generateDocx(improvedCv);
 
     return new NextResponse(uint8, {
       status: 200,

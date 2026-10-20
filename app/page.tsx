@@ -6,11 +6,11 @@ export default function HomePage() {
   const router = useRouter();
 
   return (
-    <main className="min-h-screen bg-[--bg-primary] text-[--text-primary]">
+    <main className="flex-1 bg-background text-foreground">
       {/* Navigation Header */}
       <header className="sticky top-0 z-50 bg-white border-b border-gray-100">
         <nav className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <h1 className="text-2xl font-bold text-gray-900">ATS Checker</h1>
+          <span className="text-2xl font-bold text-gray-900">ATS Checker</span>
           <div className="hidden sm:flex items-center gap-12">
             <a href="#features" className="text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors">
               Features
@@ -31,12 +31,12 @@ export default function HomePage() {
       {/* Hero Section */}
       <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-24 sm:py-32">
         <div className="max-w-3xl mx-auto text-center">
-          <h2 className="text-5xl sm:text-6xl lg:text-7xl font-bold tracking-tight text-gray-900 mb-6">
+          <h1 className="text-5xl sm:text-6xl lg:text-7xl font-bold tracking-tight text-gray-900 mb-6">
             Beat the ATS
-          </h2>
+          </h1>
           <p className="text-lg sm:text-xl text-gray-600 leading-relaxed mb-10">
-            Match your resume to a real job post with AI-powered analysis.
-            See exactly what changes boost your ATS score for that role.
+            Score your CV against the job post you&apos;re applying for. See which
+            requirements you miss and get rewrites that don&apos;t invent experience.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <button
@@ -53,7 +53,7 @@ export default function HomePage() {
             </button>
           </div>
           <p className="text-sm text-gray-500 mt-6">
-            No credit card required. Results in under 2 seconds.
+            Free, no sign-up. Results in about 30 seconds.
           </p>
         </div>
       </section>
@@ -63,19 +63,19 @@ export default function HomePage() {
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-12">
             <div className="text-center">
-              <div className="text-5xl font-bold text-blue-600 mb-3">98%</div>
-              <p className="text-base font-semibold text-gray-900 mb-1">Accuracy</p>
-              <p className="text-sm text-gray-600">Catches ATS-blocking keywords</p>
+              <div className="text-5xl font-bold text-blue-600 mb-3">0</div>
+              <p className="text-base font-semibold text-gray-900 mb-1">AI guesswork in the score</p>
+              <p className="text-sm text-gray-600">AI reads the job post and drafts rewrites. Fixed rules compute the score</p>
             </div>
             <div className="text-center">
-              <div className="text-5xl font-bold text-blue-600 mb-3">&lt;2s</div>
-              <p className="text-base font-semibold text-gray-900 mb-1">Analysis Speed</p>
-              <p className="text-sm text-gray-600">Lightning-fast results</p>
+              <div className="text-5xl font-bold text-blue-600 mb-3">5</div>
+              <p className="text-base font-semibold text-gray-900 mb-1">Scored areas</p>
+              <p className="text-sm text-gray-600">Keywords, structure, experience, job title and education, with the points for each</p>
             </div>
             <div className="text-center">
-              <div className="text-5xl font-bold text-blue-600 mb-3">100%</div>
-              <p className="text-base font-semibold text-gray-900 mb-1">Private</p>
-              <p className="text-sm text-gray-600">No data storage</p>
+              <div className="text-5xl font-bold text-blue-600 mb-3">~30s</div>
+              <p className="text-base font-semibold text-gray-900 mb-1">Per analysis</p>
+              <p className="text-sm text-gray-600">Reading the job post, scoring, and an AI rewrite of your CV</p>
             </div>
           </div>
         </div>
@@ -94,12 +94,12 @@ export default function HomePage() {
 
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-8">
           {[
-            { title: 'ATS Score', desc: 'Detailed 0-100 compatibility score' },
-            { title: 'Keyword Analysis', desc: 'Missing keywords highlighted' },
-            { title: 'Smart Suggestions', desc: 'Actionable text improvements' },
+            { title: 'ATS Score', desc: 'A 0-100 match score with the points behind every part' },
+            { title: 'Keyword Analysis', desc: 'Required and preferred keywords, found and missing' },
+            { title: 'Honest Rewrites', desc: 'Suggested edits that never add skills you don\'t show' },
             { title: 'Section Breakdown', desc: 'Score by resume section' },
-            { title: 'CV Export', desc: 'Download optimized DOCX file' },
-            { title: 'Privacy First', desc: 'Zero data retention' }
+            { title: 'CV Export', desc: 'Download the improved CV as DOCX, LaTeX or plain text' },
+            { title: 'Privacy', desc: 'Your CV isn\'t saved. It goes to an AI provider only to run the analysis' }
           ].map((feature) => (
             <div
               key={feature.title}
@@ -128,7 +128,7 @@ export default function HomePage() {
             {[
               { num: '1', title: 'Upload CV', desc: 'Share your resume' },
               { num: '2', title: 'Paste Job Post', desc: 'Add the target job description' },
-              { num: '3', title: 'Get Score', desc: 'Instant ATS analysis' }
+              { num: '3', title: 'Get Score', desc: 'Your score, gaps and rewrites in about 30 seconds' }
             ].map((step) => (
               <div key={step.num} className="text-center">
                 <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-blue-600 text-white font-bold text-lg mb-4">
@@ -148,7 +148,7 @@ export default function HomePage() {
           Ready for a better resume?
         </h3>
         <p className="text-lg text-gray-600 mb-10 max-w-2xl mx-auto">
-          Join thousands using ATS Checker to improve their applications
+          Check your CV against the job you want before you apply
         </p>
         <button
           onClick={() => router.push('/analyze')}

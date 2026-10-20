@@ -293,7 +293,7 @@ export default function AnalyzePage() {
 
             <p className="flex items-center justify-center gap-2 text-center text-sm text-slate-500">
               <ShieldCheck className="h-4 w-4 flex-shrink-0 text-emerald-600" aria-hidden="true" />
-              Your CV and job post are processed in memory and never stored.
+              We don&apos;t save your CV. It&apos;s sent to the AI provider only to run the analysis.
             </p>
           </div>
         )}
