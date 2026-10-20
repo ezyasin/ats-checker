@@ -22,7 +22,7 @@ export function Footer() {
             <span className="text-sm font-semibold">ATS Checker</span>
           </div>
           <p className="text-xs text-muted-foreground">
-            Your CV is analyzed in real-time and never stored. Powered by AI.
+            Your CV isn&apos;t saved. It&apos;s sent to an AI provider only to run the analysis.
           </p>
         </div>
       </div>
