@@ -12,6 +12,8 @@ import { ScoreBreakdown } from "@/components/ScoreBreakdown";
 import { ATSEducationCard, QuickATSTips } from "@/components/ATSEducation";
 import { ATSOptimizedExport } from "@/components/ATSOptimizedExport";
 import { ImprovementHistory } from "@/components/ImprovementHistory";
+import { CvDocument } from "@/components/CvDocument";
+import { cvToPlainText } from "@/lib/cvMarkdown";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -63,7 +65,7 @@ export default function ResultsPage() {
   async function handleExport(format: "docx" | "txt" | "tex") {
     try {
       if (format === "txt") {
-        const blob = new Blob([improvedCv], { type: "text/plain;charset=utf-8" });
+        const blob = new Blob([cvToPlainText(improvedCv)], { type: "text/plain;charset=utf-8" });
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
@@ -234,7 +236,7 @@ export default function ResultsPage() {
               </CardHeader>
               <CardContent>
                 {result.originalCv && result.improvedCv ? (
-                  <CVDiffViewer original={result.originalCv} improved={result.improvedCv} />
+                  <CVDiffViewer original={result.originalCv} improved={cvToPlainText(result.improvedCv)} />
                 ) : (
                   <div className="text-center text-gray-500 py-8">
                     No changes to display
@@ -275,10 +277,8 @@ export default function ResultsPage() {
               </CardHeader>
               <CardContent>
                 {result.improvedCv && typeof result.improvedCv === 'string' && result.improvedCv.trim().length > 0 ? (
-                  <ScrollArea className="h-[600px] border rounded-lg p-4">
-                    <div className="whitespace-pre-wrap text-sm text-gray-800 font-mono">
-                      {result.improvedCv}
-                    </div>
+                  <ScrollArea className="h-[600px] rounded-lg border bg-white">
+                    <CvDocument markdown={result.improvedCv} className="mx-auto max-w-3xl px-6 py-8 sm:px-10" />
                   </ScrollArea>
                 ) : (
                   <div className="text-center text-gray-500 py-8">

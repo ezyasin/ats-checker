@@ -98,7 +98,7 @@ export default function HomePage() {
             { title: 'Keyword Analysis', desc: 'Required and preferred keywords, found and missing' },
             { title: 'Honest Rewrites', desc: 'Suggested edits that never add skills you don\'t show' },
             { title: 'Section Breakdown', desc: 'Score by resume section' },
-            { title: 'CV Export', desc: 'Download the improved CV as DOCX or LaTeX' },
+            { title: 'CV Export', desc: 'Download the improved CV as DOCX, LaTeX or plain text' },
             { title: 'Privacy', desc: 'Your CV isn\'t saved. It goes to an AI provider only to run the analysis' }
           ].map((feature) => (
             <div

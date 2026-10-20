@@ -2,6 +2,7 @@
 
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { CvDocument } from "@/components/CvDocument";
 import type { Suggestion } from "@/types/analysis";
 
 const priorityConfig = {
@@ -46,14 +47,14 @@ export function SuggestionCard({ suggestion }: SuggestionCardProps) {
             <p className="text-xs font-medium text-red-600 dark:text-red-400 mb-1">
               Original
             </p>
-            <p className="text-sm">{suggestion.original}</p>
+            <CvDocument markdown={suggestion.original} compact />
           </div>
 
           <div className="rounded-md border border-green-200 bg-green-50 p-3 dark:border-green-900 dark:bg-green-950/30">
             <p className="text-xs font-medium text-green-600 dark:text-green-400 mb-1">
               Suggested
             </p>
-            <p className="text-sm">{suggestion.improved}</p>
+            <CvDocument markdown={suggestion.improved} compact />
           </div>
         </div>
       </CardContent>

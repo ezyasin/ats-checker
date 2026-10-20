@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Download, Copy, CheckCircle, AlertTriangle } from "lucide-react";
 import { useEffect, useState } from "react";
+import { cvToPlainText } from "@/lib/cvMarkdown";
 
 interface ExportOption {
   id: "docx" | "txt" | "tex";
@@ -93,7 +94,7 @@ export function ATSOptimizedExport({ improvedCv, onExport }: ATSOptimizedExportP
 
   const handleCopyToClipboard = async () => {
     try {
-      await copyWithFallback(improvedCv);
+      await copyWithFallback(cvToPlainText(improvedCv));
       setCopyStatus("success");
     } catch {
       setCopyStatus("error");
