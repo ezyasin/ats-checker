@@ -8,7 +8,7 @@ import { KeywordBreakdown } from "@/components/KeywordBreakdown";
 import { SuggestionCard } from "@/components/SuggestionCard";
 import { SectionScores } from "@/components/SectionScores";
 import { CVDiffViewer } from "@/components/CVDiffViewer";
-import { ATSMetrics } from "@/components/ATSMetrics";
+import { ScoreBreakdown } from "@/components/ScoreBreakdown";
 import { ATSEducationCard, QuickATSTips } from "@/components/ATSEducation";
 import { ATSOptimizedExport } from "@/components/ATSOptimizedExport";
 import { ImprovementHistory } from "@/components/ImprovementHistory";
@@ -57,6 +57,8 @@ export default function ResultsPage() {
     (s) => s.priority === "optional"
   ).length;
   const improvedCv = result.improvedCv;
+  const improvedScore = result.improvedScoring.total;
+  const scoreDelta = improvedScore - result.atsScore;
 
   async function handleExport(format: "docx" | "txt" | "tex") {
     try {
@@ -130,8 +132,24 @@ export default function ResultsPage() {
         {/* Top: Score + Section Scores */}
         <div className="grid gap-8 md:grid-cols-3">
           {/* Score Gauge */}
-          <Card className="flex items-center justify-center py-8">
+          <Card className="flex flex-col items-center justify-center gap-4 py-8">
             <ScoreGauge score={result.atsScore} verdict={result.verdict} />
+            <p className="px-4 text-center text-sm text-muted-foreground">
+              Improved CV scores{" "}
+              <span className="font-semibold text-foreground">{improvedScore}</span>
+              {scoreDelta !== 0 && (
+                <span
+                  className={
+                    scoreDelta > 0
+                      ? "ml-1 font-medium text-green-700 dark:text-green-400"
+                      : "ml-1 font-medium text-red-700 dark:text-red-400"
+                  }
+                >
+                  ({scoreDelta > 0 ? "+" : ""}
+                  {scoreDelta})
+                </span>
+              )}
+            </p>
           </Card>
 
           {/* Section Scores */}
@@ -140,24 +158,27 @@ export default function ResultsPage() {
           </div>
         </div>
 
+        <div className="mt-8">
+          <ScoreBreakdown scoring={result.scoring} />
+        </div>
+
         <Separator className="my-8" />
 
         {/* Keywords */}
         <KeywordBreakdown
-          matched={result.matchedKeywords}
-          missing={result.missingKeywords}
+          matches={result.scoring.keywordMatches}
+          unaddressed={result.unaddressedKeywords}
         />
 
         <Separator className="my-8" />
 
         {/* Suggestions & Improved CV */}
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-2 lg:grid-cols-6">
+          <TabsList className="grid w-full grid-cols-2 lg:grid-cols-5">
             <TabsTrigger value="suggestions">
               Suggestions ({result.suggestions.length})
             </TabsTrigger>
             <TabsTrigger value="diff">Changes Made (Diff)</TabsTrigger>
-            <TabsTrigger value="ats-metrics">ATS Analysis</TabsTrigger>
             <TabsTrigger value="education">ATS Tips</TabsTrigger>
             <TabsTrigger value="export">Export</TabsTrigger>
             <TabsTrigger value="improved-cv">CV Preview</TabsTrigger>
@@ -221,24 +242,6 @@ export default function ResultsPage() {
                 )}
               </CardContent>
             </Card>
-          </TabsContent>
-
-          <TabsContent value="ats-metrics" className="mt-6">
-            {result.atsMetrics ? (
-              <ATSMetrics 
-                metrics={result.atsMetrics} 
-                parsingIssues={result.parsingIssues}
-                formattingIssues={result.formattingIssues}
-              />
-            ) : (
-              <Card>
-                <CardContent className="py-8">
-                  <p className="text-center text-muted-foreground">
-                    ATS metrics not available for this analysis
-                  </p>
-                </CardContent>
-              </Card>
-            )}
           </TabsContent>
 
           <TabsContent value="education" className="mt-6 space-y-6">

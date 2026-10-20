@@ -1,9 +1,6 @@
-export interface SectionScore {
-  summary: number;
-  skills: number;
-  experience: number;
-  education: number;
-}
+import type { JobRequirements, ScoreResult } from "@/lib/scoring/types";
+
+export type { SectionScores as SectionScore } from "@/lib/scoring/types";
 
 export interface Suggestion {
   priority: "critical" | "important" | "optional";
@@ -19,35 +16,25 @@ export interface ImprovementHistoryEntry {
   changes: string[];
 }
 
-// Enhanced ATS metrics for detailed analysis
-export interface ATSMetrics {
-  parsingScore: number; // How well ATS can parse the resume (0-100)
-  formattingScore: number; // ATS-friendly formatting (0-100)
-  keywordScore: number; // Keyword optimization (0-100)
-  sectionScore: number; // Proper section structure (0-100)
-  aTSCompatibility: number; // Overall ATS compatibility (0-100)
-}
-
 export interface AnalysisResult {
   atsScore: number;
-  verdict: "Poor" | "Fair" | "Good" | "Excellent";
+  verdict: ScoreResult["verdict"];
   matchedKeywords: string[];
   missingKeywords: string[];
-  sectionScores: SectionScore;
+  sectionScores: ScoreResult["sectionScores"];
   suggestions: Suggestion[];
   originalCv: string;
   improvedCv: string;
-  
-  // Enhanced ATS analysis fields
-  atsMetrics?: ATSMetrics;
-  parsingIssues?: string[];
-  formattingIssues?: string[];
-  improvementHistory?: ImprovementHistoryEntry[];
-}
 
-export interface AnalysisRequest {
-  cvText: string;
-  jobDescription: string;
+  /** The requirements the LLM extracted from the job post. */
+  requirements: JobRequirements;
+  /** Full deterministic breakdown for the original CV. */
+  scoring: ScoreResult;
+  /** The improved CV scored by the same engine. */
+  improvedScoring: ScoreResult;
+  /** Missing keywords the rewrite could not add without inventing experience. */
+  unaddressedKeywords: string[];
+  improvementHistory?: ImprovementHistoryEntry[];
 }
 
 export interface ExportRequest {

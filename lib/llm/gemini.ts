@@ -2,9 +2,12 @@
  * Google Gemini LLM Provider
  */
 
-import { GoogleGenerativeAI } from "@google/generative-ai";
-import { AnalysisResponse, LLMClient } from "./types";
-import { buildAnalysisPrompt, buildCVOnlyAnalysisPrompt } from "../promptBuilder";
+import {
+  GoogleGenerativeAI,
+  GoogleGenerativeAIFetchError,
+  type ResponseSchema,
+} from "@google/generative-ai";
+import { JsonRequest, LLMClient, LLMError, parseJsonObject } from "./types";
 
 export class GeminiClient implements LLMClient {
   private client: GoogleGenerativeAI;
@@ -13,83 +16,39 @@ export class GeminiClient implements LLMClient {
     this.client = new GoogleGenerativeAI(apiKey);
   }
 
-  async analyze(cvText: string, jobDescription?: string): Promise<AnalysisResponse> {
-    const prompt = jobDescription 
-      ? buildAnalysisPrompt(cvText, jobDescription)
-      : buildCVOnlyAnalysisPrompt(cvText);
+  async generateJson(request: JsonRequest): Promise<unknown> {
     const models = this.getModelChain();
-    const failures: string[] = [];
+    let lastError: LLMError | null = null;
 
     for (const model of models) {
-      const gemini = this.client.getGenerativeModel({ model });
+      const gemini = this.client.getGenerativeModel({
+        model,
+        systemInstruction: request.system,
+        generationConfig: {
+          temperature: 0,
+          responseMimeType: "application/json",
+          responseSchema: toGeminiSchema(request.schema),
+          maxOutputTokens: request.maxTokens,
+        },
+      });
       const maxAttempts = 3;
 
       for (let attempt = 1; attempt <= maxAttempts; attempt++) {
         try {
-          const result = await gemini.generateContent(prompt);
-          const response = result.response;
-          const text = response.text();
-
-          return this.parseResponse(text);
+          const result = await gemini.generateContent(request.prompt);
+          return parseJsonObject(result.response.text(), "gemini");
         } catch (error) {
-          if (attempt === maxAttempts || !this.shouldRetrySameModel(error)) {
-            failures.push(`${model}: ${this.getErrorMessage(error)}`);
-            break;
-          }
-
+          lastError = toLLMError(error);
+          if (attempt === maxAttempts || lastError.kind !== "busy") break;
           await new Promise((resolve) => setTimeout(resolve, attempt * 1500));
         }
       }
+
+      // A bad key won't work on the fallback model either.
+      if (lastError?.kind === "auth") break;
     }
 
-    throw new Error(`Gemini model chain failed. ${failures.join(" | ")}`);
-  }
-
-  private parseResponse(text: string): AnalysisResponse {
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      throw new Error("Could not extract JSON from Gemini response");
-    }
-
-    const parsed = JSON.parse(jsonMatch[0]);
-    this.validateResponse(parsed);
-    return parsed;
-  }
-
-  private validateResponse(data: unknown): asserts data is AnalysisResponse {
-    if (!data || typeof data !== "object") {
-      throw new Error("Invalid response payload");
-    }
-
-    const candidate = data as Record<string, unknown>;
-
-    if (typeof candidate.atsScore !== "number" || candidate.atsScore < 0 || candidate.atsScore > 100) {
-      throw new Error("Invalid ATS score");
-    }
-    if (!Array.isArray(candidate.matchedKeywords) || !Array.isArray(candidate.missingKeywords)) {
-      throw new Error("Invalid keywords format");
-    }
-    if (!Array.isArray(candidate.suggestions)) {
-      throw new Error("Invalid suggestions format");
-    }
-    if (
-      !candidate.suggestions.every((suggestion) => {
-        if (!suggestion || typeof suggestion !== "object") return false;
-        const entry = suggestion as Record<string, unknown>;
-        return (
-          typeof entry.section === "string" &&
-          typeof entry.priority === "string" &&
-          typeof entry.original === "string" &&
-          typeof entry.improved === "string" &&
-          typeof entry.reason === "string"
-        );
-      })
-    ) {
-      throw new Error("Invalid suggestion payload");
-    }
-    if (typeof candidate.improvedCv !== "string" || candidate.improvedCv.length === 0) {
-      throw new Error("Missing or invalid improvedCv in response");
-    }
+    throw lastError ?? new LLMError("unknown", "gemini", "Gemini model chain failed.");
   }
 
   private getModelChain(): string[] {
@@ -98,30 +57,41 @@ export class GeminiClient implements LLMClient {
 
     return Array.from(new Set([primary, fallback].filter(Boolean)));
   }
+}
 
-  private shouldRetrySameModel(error: unknown): boolean {
-    if (!(error instanceof Error)) {
-      return false;
+/**
+ * Gemini's responseSchema is an OpenAPI subset: no additionalProperties, and
+ * string enums need format "enum".
+ */
+function toGeminiSchema(schema: Record<string, unknown>): ResponseSchema {
+  const convert = (node: unknown): unknown => {
+    if (Array.isArray(node)) return node.map(convert);
+    if (typeof node !== "object" || node === null) return node;
+
+    const result: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(node)) {
+      if (key === "additionalProperties") continue;
+      result[key] = key === "enum" ? value : convert(value);
     }
+    if (result.type === "string" && Array.isArray(result.enum)) result.format = "enum";
+    return result;
+  };
+  return convert(schema) as ResponseSchema;
+}
 
+function toLLMError(error: unknown): LLMError {
+  if (error instanceof LLMError) return error;
+  if (error instanceof GoogleGenerativeAIFetchError) {
     const message = error.message.toLowerCase();
+    if (error.status === 401 || error.status === 403 || message.includes("api key not valid")) {
+      return new LLMError("auth", "gemini", "The Google API key was rejected.");
+    }
     if (message.includes("quota exceeded")) {
-      return false;
+      return new LLMError("quota", "gemini", error.message);
     }
-
-    return (
-      error.message.includes("[503 Service Unavailable]") ||
-      error.message.includes("[429") ||
-      message.includes("high demand") ||
-      message.includes("rate limit")
-    );
-  }
-
-  private getErrorMessage(error: unknown): string {
-    if (error instanceof Error) {
-      return error.message;
+    if (error.status === 429 || error.status === 503 || error.status === 500) {
+      return new LLMError("busy", "gemini", error.message);
     }
-
-    return "Unknown Gemini error";
   }
+  return new LLMError("unknown", "gemini", error instanceof Error ? error.message : "Unknown Gemini error");
 }
