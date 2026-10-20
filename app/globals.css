@@ -2,6 +2,11 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
+/* dark: follows the .dark class, like the tokens below. Tailwind's default is
+   the OS setting, which mixed dark accents into the light theme on Macs in
+   dark mode. Nothing sets .dark yet, so the app is consistently light. */
+@custom-variant dark (&:is(.dark *));
+
 /* Expose the shadcn tokens as Tailwind colours (bg-card, text-muted-foreground,
    border-border, ...). Without this block those classes generate no CSS. */
 @theme inline {
