@@ -39,7 +39,7 @@ export function ScoreGauge({ score, verdict }: ScoreGaugeProps) {
             fill="none"
             stroke="currentColor"
             strokeWidth="8"
-            className="text-muted/30"
+            className="text-slate-200"
           />
           {/* Score arc */}
           <motion.circle
