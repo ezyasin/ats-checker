@@ -48,7 +48,7 @@ export function UploadZone({ className }: UploadZoneProps) {
     <Card
       {...getRootProps()}
       className={cn(
-        "relative flex h-full min-h-[320px] cursor-pointer items-center justify-center rounded-[24px] border-2 border-dashed bg-slate-50/70 p-8 text-center transition-all duration-200",
+        "relative flex h-full min-h-[320px] cursor-pointer items-center justify-center rounded-xl border-2 border-dashed bg-slate-50/70 p-8 text-center transition-colors duration-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600",
         isDragActive
           ? "border-primary bg-primary/5 shadow-[0_20px_45px_-30px_rgba(37,99,235,0.55)]"
           : cvFile
@@ -80,7 +80,7 @@ export function UploadZone({ className }: UploadZoneProps) {
             <span className="inline-flex items-center rounded-full border border-emerald-200 bg-white px-3 py-1 text-xs font-semibold text-emerald-700">
               Ready for analysis
             </span>
-            <p className="text-lg font-semibold text-emerald-700">
+            <p className="text-lg font-semibold break-all text-emerald-700">
               {cvFile.name}
             </p>
             <p className="text-sm leading-6 text-muted-foreground">

@@ -5,30 +5,117 @@ import { extractTextFromLatex } from "@/lib/parsers/latex";
 import { validateFileBytes, validateJobDescription } from "@/lib/validators";
 import { createLLMClient, getAvailableProviders, getDefaultProvider } from "@/lib/llm/factory";
 import { extractRequirements, rewriteCv } from "@/lib/llm/tasks";
-import { LLMError, type LLMProvider } from "@/lib/llm/types";
+import { LLMError, type LLMClient, type LLMProvider } from "@/lib/llm/types";
 import { scoreCv } from "@/lib/scoring";
+import { ANALYSIS_STREAM_CONTENT_TYPE, encodeEvent, type AnalysisEvent } from "@/lib/analysisStream";
 import type { AnalysisResult } from "@/types/analysis";
 
-function llmErrorResponse(error: LLMError) {
+function llmErrorMessage(error: LLMError) {
   const name = error.provider.toUpperCase();
   switch (error.kind) {
     case "auth":
-      return NextResponse.json({ error: `${name} API key is missing or invalid.` }, { status: 503 });
+      return `${name} API key is missing or invalid.`;
     case "quota":
-      return NextResponse.json(
-        { error: `${name} quota is exhausted for the configured model. Switch models or try again later.` },
-        { status: 503 }
-      );
+      return `${name} quota is exhausted for the configured model. Switch models or try again later.`;
     case "busy":
-      return NextResponse.json(
-        { error: `${name} is temporarily busy. Please try the analysis again in a minute.` },
-        { status: 503 }
-      );
+      return `${name} is temporarily busy. Please try the analysis again in a minute.`;
     case "refused":
-      return NextResponse.json({ error: `${name} declined to process this CV.` }, { status: 422 });
+      return `${name} declined to process this CV.`;
     default:
-      return NextResponse.json({ error: `Failed to analyze with ${error.provider}. Please try again.` }, { status: 502 });
+      return `Failed to analyze with ${error.provider}. Please try again.`;
   }
+}
+
+/**
+ * Runs the LLM steps after the response has started, reporting each step as
+ * it begins. Input errors are caught before this and returned as plain JSON.
+ */
+function streamAnalysis(
+  signal: AbortSignal,
+  llmClient: LLMClient,
+  provider: LLMProvider,
+  cvText: string,
+  jobDescription: string
+) {
+  const encoder = new TextEncoder();
+  let cancelled = false;
+
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      const isGone = () => cancelled || signal.aborted;
+      const send = (event: AnalysisEvent) => {
+        if (isGone()) return;
+        try {
+          controller.enqueue(encoder.encode(encodeEvent(event)));
+        } catch {
+          cancelled = true;
+        }
+      };
+
+      try {
+        // 1. The LLM turns the job post into structured requirements (cached per post).
+        send({ type: "stage", stage: "requirements" });
+        const requirements = await extractRequirements(llmClient, provider, jobDescription);
+
+        // 2. Deterministic scoring: same CV + same requirements = same score.
+        send({ type: "stage", stage: "score" });
+        const scoring = scoreCv(cvText, requirements);
+        send({ type: "score", total: scoring.total, verdict: scoring.verdict });
+
+        // The browser cancelled; skip the most expensive call.
+        if (isGone()) return;
+
+        // 3. The LLM rewrites the CV, aimed at the gaps the engine found.
+        send({ type: "stage", stage: "rewrite" });
+        const rewrite = await rewriteCv(llmClient, provider, cvText, jobDescription, scoring);
+        // 4. The rewrite is scored by the same engine, never by the LLM.
+        const improvedScoring = scoreCv(rewrite.improvedCv, requirements);
+
+        const result: AnalysisResult = {
+          atsScore: scoring.total,
+          verdict: scoring.verdict,
+          matchedKeywords: scoring.keywordMatches.filter((match) => match.matched).map((match) => match.term),
+          missingKeywords: scoring.keywordMatches.filter((match) => !match.matched).map((match) => match.term),
+          sectionScores: scoring.sectionScores,
+          suggestions: rewrite.suggestions,
+          originalCv: cvText,
+          improvedCv: rewrite.improvedCv,
+          requirements,
+          scoring,
+          improvedScoring,
+          unaddressedKeywords: rewrite.unaddressedKeywords,
+          improvementHistory: [],
+        };
+        send({ type: "result", result });
+      } catch (error) {
+        send({
+          type: "error",
+          error:
+            error instanceof LLMError
+              ? llmErrorMessage(error)
+              : "An unexpected error occurred during analysis.",
+        });
+      } finally {
+        try {
+          controller.close();
+        } catch {
+          // Already closed by a cancelled reader.
+        }
+      }
+    },
+    cancel() {
+      cancelled = true;
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      "Content-Type": `${ANALYSIS_STREAM_CONTENT_TYPE}; charset=utf-8`,
+      // no-transform keeps compression from buffering the stream.
+      "Cache-Control": "no-cache, no-transform",
+      "X-Accel-Buffering": "no",
+    },
+  });
 }
 
 export async function POST(request: NextRequest) {
@@ -108,47 +195,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    let llmClient: LLMClient;
     try {
-      const llmClient = createLLMClient(provider);
-
-      // 1. The LLM turns the job post into structured requirements (cached per post).
-      const requirements = await extractRequirements(llmClient, provider, jobDescription);
-      // 2. Deterministic scoring: same CV + same requirements = same score.
-      const scoring = scoreCv(cvText, requirements);
-      // 3. The LLM rewrites the CV, aimed at the gaps the engine found.
-      const rewrite = await rewriteCv(llmClient, provider, cvText, jobDescription, scoring);
-      // 4. The rewrite is scored by the same engine, never by the LLM.
-      const improvedScoring = scoreCv(rewrite.improvedCv, requirements);
-
-      const result: AnalysisResult = {
-        atsScore: scoring.total,
-        verdict: scoring.verdict,
-        matchedKeywords: scoring.keywordMatches.filter((match) => match.matched).map((match) => match.term),
-        missingKeywords: scoring.keywordMatches.filter((match) => !match.matched).map((match) => match.term),
-        sectionScores: scoring.sectionScores,
-        suggestions: rewrite.suggestions,
-        originalCv: cvText,
-        improvedCv: rewrite.improvedCv,
-        requirements,
-        scoring,
-        improvedScoring,
-        unaddressedKeywords: rewrite.unaddressedKeywords,
-        improvementHistory: [],
-      };
-
-      return NextResponse.json(result);
-    } catch (error) {
-      if (error instanceof LLMError) {
-        return llmErrorResponse(error);
-      }
-      if (error instanceof Error && error.message.includes("environment variable is not set")) {
-        return NextResponse.json(
-          { error: `${provider.toUpperCase()} API key is not configured.` },
-          { status: 503 }
-        );
-      }
-      throw error;
+      llmClient = createLLMClient(provider);
+    } catch {
+      return NextResponse.json(
+        { error: `${provider.toUpperCase()} API key is not configured.` },
+        { status: 503 }
+      );
     }
+
+    return streamAnalysis(request.signal, llmClient, provider, cvText, jobDescription);
   } catch {
     return NextResponse.json(
       { error: "An unexpected error occurred during analysis." },
