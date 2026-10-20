@@ -126,7 +126,11 @@ function isAnalysisResult(data: unknown): data is AnalysisResult {
     Array.isArray(candidate.missingKeywords) &&
     Array.isArray(candidate.suggestions) &&
     typeof candidate.improvedCv === "string" &&
-    typeof candidate.originalCv === "string"
+    typeof candidate.originalCv === "string" &&
+    typeof candidate.scoring === "object" &&
+    candidate.scoring !== null &&
+    typeof candidate.improvedScoring === "object" &&
+    candidate.improvedScoring !== null
   );
 }
 

@@ -3,7 +3,6 @@
 import { create } from "zustand";
 import type {
   AnalysisResult,
-  ATSMetrics,
   ImprovementHistoryEntry,
 } from "@/types/analysis";
 import type { LLMProvider } from "@/lib/llm/types";
@@ -31,11 +30,6 @@ interface AnalysisState {
   setResult: (result: EnhancedAnalysisResult | null) => void;
   setError: (error: string | null) => void;
   reset: () => void;
-  // New actions for ATS tracking
-  updateATSMetrics: (metrics: ATSMetrics) => void;
-  addParsingIssue: (issue: string) => void;
-  addFormattingIssue: (issue: string) => void;
-  addToImprovementHistory: (entry: ImprovementHistoryEntry) => void;
 }
 
 const initialState = {
@@ -85,26 +79,4 @@ export const useAnalysisStore = create<AnalysisState>((set) => ({
     }),
   setError: (error) => set({ error, isAnalyzing: false }),
   reset: () => set(initialState),
-  // New actions for ATS tracking
-  updateATSMetrics: (metrics) => set((state) => ({
-    result: state.result ? { ...state.result, atsMetrics: metrics } : state.result
-  })),
-  addParsingIssue: (issue) => set((state) => ({
-    result: state.result ? { 
-      ...state.result, 
-      parsingIssues: [...(state.result.parsingIssues || []), issue] 
-    } : state.result
-  })),
-  addFormattingIssue: (issue) => set((state) => ({
-    result: state.result ? { 
-      ...state.result, 
-      formattingIssues: [...(state.result.formattingIssues || []), issue] 
-    } : state.result
-  })),
-  addToImprovementHistory: (entry) => set((state) => ({
-    result: state.result ? { 
-      ...state.result, 
-      improvementHistory: [...(state.result.improvementHistory || []), entry] 
-    } : state.result
-  })),
 }));

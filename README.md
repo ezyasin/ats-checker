@@ -20,6 +20,16 @@ The app is built for role-specific resume optimization. A CV upload alone is not
 
 These screenshots reflect the current job-post-based flow: upload a CV, paste a real target job post, track staged analysis progress, then review the score and rewrite suggestions.
 
+## How Scoring Works
+
+The score is computed by fixed rules, not by an AI model, so the same CV and job post always get the same score:
+
+1. An LLM reads the job post once and extracts structured requirements: title, keywords (required or preferred), minimum years and minimum degree. The result is cached per job post.
+2. `lib/scoring` scores the CV against those requirements: keyword match (45 pts), structure & parsing (20), years of experience (15), job title (10) and education (10). Every point is shown in the results breakdown.
+3. The LLM rewrites the CV around the gaps the engine found, without inventing skills, and the rewrite is scored by the same engine.
+
+See [ROADMAP.md](./ROADMAP.md) for what's next.
+
 ## What The App Does
 
 - Upload a PDF, DOCX, or LaTeX (.tex) CV
@@ -88,7 +98,7 @@ The project reads these variables:
 - `ANTHROPIC_API_KEY`
   Enables Claude.
 - `CLAUDE_MODEL`
-  Optional Claude model override.
+  Optional Claude model override. Defaults to `claude-opus-5-5`. Requires a model that supports structured outputs and effort.
 - `GOOGLE_API_KEY`
   Enables Gemini.
 - `GEMINI_MODEL`
@@ -117,6 +127,8 @@ npm run dev
 npm run build
 npm run start
 npm run lint
+npm test                   # unit tests, no API calls
+npm run eval:consistency   # re-extracts requirements N times with a real provider and reports the score spread
 ```
 
 ## Notes
