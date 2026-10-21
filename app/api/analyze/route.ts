@@ -5,14 +5,22 @@ import { extractTextFromLatex } from "@/lib/parsers/latex";
 import { validateFileBytes, validateJobDescription } from "@/lib/validators";
 import { createLLMClient, getAvailableProviders, getDefaultProvider } from "@/lib/llm/factory";
 import { extractRequirements, rewriteCv } from "@/lib/llm/tasks";
-import { LLMError, type LLMClient, type LLMProvider } from "@/lib/llm/types";
+import { LLMError, describeLLMError, type LLMClient, type LLMProvider } from "@/lib/llm/types";
 import { scoreCv } from "@/lib/scoring";
 import { ANALYSIS_STREAM_CONTENT_TYPE, encodeEvent, type AnalysisEvent } from "@/lib/analysisStream";
 import type { AnalysisResult } from "@/types/analysis";
 
+const MODEL_ENV: Record<LLMProvider, string> = {
+  claude: "CLAUDE_MODEL",
+  gemini: "GEMINI_MODEL",
+  openai: "OPENAI_MODEL",
+};
+
 function llmErrorMessage(error: LLMError) {
   const name = error.provider.toUpperCase();
   switch (error.kind) {
+    case "model":
+      return `The configured ${name} model isn't available. Check ${MODEL_ENV[error.provider]} in .env.local.`;
     case "auth":
       return `${name} API key is missing or invalid.`;
     case "quota":
@@ -93,7 +101,7 @@ function streamAnalysis(
         // Log the cause for the terminal; the browser gets a short message.
         console.error(
           `[analyze] ${provider} failed:`,
-          error instanceof LLMError ? `(${error.kind}) ${error.message}` : error
+          error instanceof LLMError ? describeLLMError(error) : error
         );
         send({
           type: "error",
