@@ -3,11 +3,21 @@
  */
 
 import {
+  FinishReason,
   GoogleGenerativeAI,
   GoogleGenerativeAIFetchError,
+  type GenerateContentResult,
   type ResponseSchema,
 } from "@google/generative-ai";
-import { JsonRequest, LLMClient, LLMError, parseJsonObject } from "./types";
+import { JsonRequest, LLMClient, LLMError, describeLLMError, parseJsonObject } from "./types";
+
+const BLOCKED = new Set<string>([
+  FinishReason.SAFETY,
+  FinishReason.RECITATION,
+  FinishReason.BLOCKLIST,
+  FinishReason.PROHIBITED_CONTENT,
+  FinishReason.SPII,
+]);
 
 export class GeminiClient implements LLMClient {
   private client: GoogleGenerativeAI;
@@ -36,9 +46,11 @@ export class GeminiClient implements LLMClient {
       for (let attempt = 1; attempt <= maxAttempts; attempt++) {
         try {
           const result = await gemini.generateContent(request.prompt);
-          return parseJsonObject(result.response.text(), "gemini");
+          return parseResult(result, request.maxTokens);
         } catch (error) {
-          lastError = toLLMError(error);
+          lastError = toLLMError(error, model);
+          // Never log prompt or response text: they contain the CV.
+          console.warn(`[gemini] ${model} attempt ${attempt} failed ${describeLLMError(lastError)}`);
           if (attempt === maxAttempts || lastError.kind !== "busy") break;
           await new Promise((resolve) => setTimeout(resolve, attempt * 1500));
         }
@@ -57,6 +69,18 @@ export class GeminiClient implements LLMClient {
 
     return Array.from(new Set([primary, fallback].filter(Boolean)));
   }
+}
+
+function parseResult(result: GenerateContentResult, maxTokens: number): unknown {
+  const blockReason = result.response.promptFeedback?.blockReason;
+  const finishReason = result.response.candidates?.[0]?.finishReason;
+  if (blockReason || (finishReason && BLOCKED.has(finishReason))) {
+    throw new LLMError("refused", "gemini", `Gemini blocked the response (${blockReason ?? finishReason}).`);
+  }
+  if (finishReason === FinishReason.MAX_TOKENS) {
+    throw new LLMError("invalid_output", "gemini", `The response hit the ${maxTokens}-token limit before the JSON was complete.`);
+  }
+  return parseJsonObject(result.response.text(), "gemini");
 }
 
 /**
@@ -79,19 +103,26 @@ function toGeminiSchema(schema: Record<string, unknown>): ResponseSchema {
   return convert(schema) as ResponseSchema;
 }
 
-function toLLMError(error: unknown): LLMError {
+export function toLLMError(error: unknown, model: string): LLMError {
   if (error instanceof LLMError) return error;
+  const cause = { cause: error };
   if (error instanceof GoogleGenerativeAIFetchError) {
     const message = error.message.toLowerCase();
     if (error.status === 401 || error.status === 403 || message.includes("api key not valid")) {
-      return new LLMError("auth", "gemini", "The Google API key was rejected.");
+      return new LLMError("auth", "gemini", "The Google API key was rejected.", cause);
     }
-    if (message.includes("quota exceeded")) {
-      return new LLMError("quota", "gemini", error.message);
+    if (error.status === 404) {
+      return new LLMError("model", "gemini", `Gemini model "${model}" was not found.`, cause);
+    }
+    // Free-tier daily limits come back as 429 "You exceeded your current quota"
+    // (not "quota exceeded"). Retrying in seconds can't help, so fall back at once.
+    const dailyLimit = JSON.stringify(error.errorDetails ?? []).includes("PerDay");
+    if (message.includes("quota exceeded") || (error.status === 429 && dailyLimit)) {
+      return new LLMError("quota", "gemini", `Gemini's daily quota for "${model}" is used up.`, cause);
     }
     if (error.status === 429 || error.status === 503 || error.status === 500) {
-      return new LLMError("busy", "gemini", error.message);
+      return new LLMError("busy", "gemini", `Gemini "${model}" is busy or rate limited.`, cause);
     }
   }
-  return new LLMError("unknown", "gemini", error instanceof Error ? error.message : "Unknown Gemini error");
+  return new LLMError("unknown", "gemini", error instanceof Error ? error.message : "Unknown Gemini error", cause);
 }

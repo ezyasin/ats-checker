@@ -24,17 +24,27 @@ export interface LLMClient {
   generateJson(request: JsonRequest): Promise<unknown>;
 }
 
-export type LLMErrorKind = "auth" | "busy" | "quota" | "invalid_output" | "refused" | "unknown";
+/** "model": the configured model name doesn't exist or the key can't use it. */
+export type LLMErrorKind = "auth" | "busy" | "quota" | "model" | "invalid_output" | "refused" | "unknown";
 
 export class LLMError extends Error {
   constructor(
     readonly kind: LLMErrorKind,
     readonly provider: LLMProvider,
-    message: string
+    message: string,
+    /** `cause` keeps the provider SDK's original error for the server log. */
+    options?: { cause?: unknown }
   ) {
-    super(message);
+    super(message, options);
     this.name = "LLMError";
   }
+}
+
+/** One log line: our message plus the provider's own. Never includes prompt text. */
+export function describeLLMError(error: LLMError): string {
+  const cause = error.cause instanceof Error ? error.cause.message : undefined;
+  const detail = cause && cause !== error.message ? ` | provider said: ${cause}` : "";
+  return `(${error.kind}) ${error.message}${detail}`;
 }
 
 /** Parse a JSON object from model text, tolerating stray code fences. */
