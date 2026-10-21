@@ -9,7 +9,7 @@ import { SuggestionCard } from "@/components/SuggestionCard";
 import { SectionScores } from "@/components/SectionScores";
 import { CVDiffViewer } from "@/components/CVDiffViewer";
 import { ScoreBreakdown } from "@/components/ScoreBreakdown";
-import { ATSEducationCard, QuickATSTips } from "@/components/ATSEducation";
+import { AtsView } from "@/components/AtsView";
 import { ATSOptimizedExport } from "@/components/ATSOptimizedExport";
 import { ImprovementHistory } from "@/components/ImprovementHistory";
 import { CvDocument } from "@/components/CvDocument";
@@ -176,14 +176,13 @@ export default function ResultsPage() {
 
         {/* Suggestions & Improved CV */}
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-2 lg:grid-cols-5">
+          <TabsList className="grid h-auto w-full grid-cols-2 sm:grid-cols-4">
             <TabsTrigger value="suggestions">
               Suggestions ({result.suggestions.length})
             </TabsTrigger>
-            <TabsTrigger value="diff">Changes Made (Diff)</TabsTrigger>
-            <TabsTrigger value="education">ATS Tips</TabsTrigger>
-            <TabsTrigger value="export">Export</TabsTrigger>
-            <TabsTrigger value="improved-cv">CV Preview</TabsTrigger>
+            <TabsTrigger value="ats-view">What the ATS sees</TabsTrigger>
+            <TabsTrigger value="diff">Changes</TabsTrigger>
+            <TabsTrigger value="improved-cv">Improved CV</TabsTrigger>
           </TabsList>
 
           <TabsContent value="suggestions" className="mt-6">
@@ -246,22 +245,12 @@ export default function ResultsPage() {
             </Card>
           </TabsContent>
 
-          <TabsContent value="education" className="mt-6 space-y-6">
-            <QuickATSTips />
-            <ATSEducationCard section="howATSWorks" />
-            <ATSEducationCard section="commonPitfalls" />
-            <ATSEducationCard section="keywordStrategy" />
-            <ATSEducationCard section="bestPractices" />
+          <TabsContent value="ats-view" className="mt-6">
+            <AtsView cvText={result.originalCv} />
           </TabsContent>
 
-          <TabsContent value="export" className="mt-6">
-            <ATSOptimizedExport 
-              improvedCv={result.improvedCv}
-              onExport={handleExport}
-            />
-          </TabsContent>
-
-          <TabsContent value="improved-cv" className="mt-6">
+          <TabsContent value="improved-cv" className="mt-6 space-y-6">
+            <ATSOptimizedExport improvedCv={result.improvedCv} onExport={handleExport} />
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center justify-between text-sm">

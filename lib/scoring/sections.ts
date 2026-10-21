@@ -81,6 +81,10 @@ export function normalizeText(text: string): string {
     .replace(/[“”]/g, '"')
     .replace(/[‐-―]/g, "-")
     .toLowerCase()
+    // Turkish dotted capital İ lowercases to "i" + U+0307, so "EXPERİENCE"
+    // would never match "experience". Dotless ı gets the same treatment.
+    .replace(/\u0307/g, "")
+    .replace(/ı/g, "i")
     .replace(/[ \t]+/g, " ");
 }
 
