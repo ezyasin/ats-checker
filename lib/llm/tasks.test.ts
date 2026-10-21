@@ -51,9 +51,45 @@ describe("sanitizeRewrite", () => {
       "openai"
     );
     expect(result.suggestions).toHaveLength(2);
-    expect(result.suggestions[1].priority).toBe("optional");
+    // Priority is set later by the scoring engine; whatever the model sends is dropped.
+    expect(result.suggestions[0]).toEqual({ section: "Skills", original: "a", improved: "b", reason: "c" });
     expect(result.improvedCv).toBe("# Jane");
     expect(() => sanitizeRewrite({ suggestions: [], improvedCv: " " }, "openai")).toThrow(LLMError);
+  });
+});
+
+describe("sanitizeRewrite filters", () => {
+  // Both cases came back from a live Gemini 2.5 Flash rewrite.
+  const skills = "Go, Python, SQL, Docker, AWS";
+  const faked = `${skills}, Message Queues (simulated)`;
+
+  it("drops placeholder claims and reverts them in the improved CV", () => {
+    const result = sanitizeRewrite(
+      {
+        suggestions: [{ section: "Skills", original: skills, improved: faked, reason: "Adds a placeholder" }],
+        improvedCv: `# Alex\n## Skills\n${faked}`,
+        unaddressedKeywords: [],
+      },
+      "gemini"
+    );
+    expect(result.suggestions).toEqual([]);
+    expect(result.improvedCv).toBe(`# Alex\n## Skills\n${skills}`);
+  });
+
+  it("drops changes an ATS reads the same way", () => {
+    const result = sanitizeRewrite(
+      {
+        suggestions: [
+          { section: "Experience", original: "BACKEND DEVELOPER iNTERN Feb. 2024 - Sep. 2024", improved: "BACKEND DEVELOPER INTERN Feb 2024 – Sep 2024", reason: "r" },
+          { section: "Experience", original: "Sep. 2024 - Mar. 2026", improved: "September 2024 – March 2026", reason: "r" },
+          { section: "Summary", original: "Backend developer", improved: "Backend developer building Go microservices", reason: "r" },
+        ],
+        improvedCv: "# Alex",
+        unaddressedKeywords: [],
+      },
+      "gemini"
+    );
+    expect(result.suggestions.map((suggestion) => suggestion.section)).toEqual(["Summary"]);
   });
 });
 
@@ -85,5 +121,11 @@ describe("buildRewritePrompt", () => {
     const missing = prompt.slice(prompt.indexOf("does not contain:"));
     expect(missing.indexOf("React (required)")).toBeLessThan(missing.indexOf("Jest (preferred)"));
     expect(prompt).toContain("Skills section:");
+  });
+
+  it("tells the model that garbled capitals are extraction artefacts, not typos", () => {
+    const cv = `${WEAK_CV}\nBACKEND DEVELOPER iNTERN Feb. 2024 - Sep. 2024`;
+    expect(buildRewritePrompt(cv, "job post", scoreCv(cv, FRONTEND_JOB))).toContain('"iNTERN" comes from that extraction');
+    expect(buildRewritePrompt(WEAK_CV, "job post", scoreCv(WEAK_CV, FRONTEND_JOB))).not.toContain("extraction");
   });
 });

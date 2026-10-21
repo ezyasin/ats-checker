@@ -64,6 +64,8 @@ export interface KeywordMatch {
   matchedAs?: string;
   occurrences: number;
   sections: SectionKey[];
+  /** In the text, but added by the rewrite without evidence, so scored as missing. */
+  unverified?: boolean;
 }
 
 export interface ScoreCheck {

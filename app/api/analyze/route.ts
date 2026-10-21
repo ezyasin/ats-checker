@@ -7,6 +7,8 @@ import { createLLMClient, getAvailableProviders, getDefaultProvider } from "@/li
 import { extractRequirements, rewriteCv } from "@/lib/llm/tasks";
 import { LLMError, describeLLMError, type LLMClient, type LLMProvider } from "@/lib/llm/types";
 import { scoreCv } from "@/lib/scoring";
+import { prioritizeSuggestions } from "@/lib/suggestions";
+import { verifyRewrite } from "@/lib/verifyRewrite";
 import { ANALYSIS_STREAM_CONTENT_TYPE, encodeEvent, type AnalysisEvent } from "@/lib/analysisStream";
 import type { AnalysisResult } from "@/types/analysis";
 
@@ -78,8 +80,12 @@ function streamAnalysis(
         // 3. The LLM rewrites the CV, aimed at the gaps the engine found.
         send({ type: "stage", stage: "rewrite" });
         const rewrite = await rewriteCv(llmClient, provider, cvText, jobDescription, scoring);
-        // 4. The rewrite is scored by the same engine, never by the LLM.
-        const improvedScoring = scoreCv(rewrite.improvedCv, requirements);
+        // 4. Keywords the rewrite added must be backed by a quote from the CV.
+        const verified = verifyRewrite(rewrite, cvText, requirements, scoring);
+        // 5. The rewrite is scored by the same engine, never by the LLM.
+        const improvedScoring = scoreCv(verified.improvedCv, requirements, {
+          unverifiedKeywords: verified.unverified,
+        });
 
         const result: AnalysisResult = {
           atsScore: scoring.total,
@@ -87,13 +93,17 @@ function streamAnalysis(
           matchedKeywords: scoring.keywordMatches.filter((match) => match.matched).map((match) => match.term),
           missingKeywords: scoring.keywordMatches.filter((match) => !match.matched).map((match) => match.term),
           sectionScores: scoring.sectionScores,
-          suggestions: rewrite.suggestions,
+          suggestions: prioritizeSuggestions(verified.suggestions, requirements, scoring),
           originalCv: cvText,
-          improvedCv: rewrite.improvedCv,
+          improvedCv: verified.improvedCv,
           requirements,
           scoring,
           improvedScoring,
-          unaddressedKeywords: rewrite.unaddressedKeywords,
+          unaddressedKeywords: [
+            ...new Set([...rewrite.unaddressedKeywords, ...verified.removed, ...verified.unverified]),
+          ],
+          keywordEvidence: verified.evidence,
+          unverifiedKeywords: verified.unverified,
           improvementHistory: [],
         };
         send({ type: "result", result });

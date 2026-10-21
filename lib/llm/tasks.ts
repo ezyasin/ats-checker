@@ -15,7 +15,8 @@ import type {
   RequirementKeyword,
   ScoreResult,
 } from "../scoring";
-import type { Suggestion } from "@/types/analysis";
+import { normalizeText } from "../scoring/sections";
+import type { RewriteSuggestion } from "@/types/analysis";
 import { LLMClient, LLMError, LLMProvider } from "./types";
 
 // Bump when the extraction prompt changes so cached requirements are refreshed.
@@ -25,7 +26,6 @@ const requirementsCache = new Map<string, JobRequirements>();
 
 const CATEGORIES = new Set<KeywordCategory>(["hard_skill", "tool", "soft_skill", "certification", "domain"]);
 const DEGREES = new Set<DegreeLevel>(["none", "high_school", "associate", "bachelor", "master", "doctorate"]);
-const PRIORITIES = new Set<Suggestion["priority"]>(["critical", "important", "optional"]);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -111,10 +111,33 @@ export async function extractRequirements(
   return requirements;
 }
 
+export interface AddedKeyword {
+  keyword: string;
+  /** The model's verbatim quote from the CV; checked in lib/verifyRewrite.ts. */
+  evidence: string;
+}
+
 export interface RewriteResult {
-  suggestions: Suggestion[];
+  suggestions: RewriteSuggestion[];
   improvedCv: string;
+  addedKeywords: AddedKeyword[];
   unaddressedKeywords: string[];
+}
+
+// A model hedging an invented claim: "Message Queues (simulated)", "[add metric]".
+const PLACEHOLDER = /\b(placeholders?|simulated|hypothetical|tbd|todo|if applicable)\b|\[[^\]]*\]/i;
+
+const MONTHS: Record<string, string> = {
+  january: "jan", february: "feb", march: "mar", april: "apr", june: "jun", july: "jul",
+  august: "aug", september: "sep", sept: "sep", october: "oct", november: "nov", december: "dec",
+};
+
+/** Text as the scoring engine reads it: case, punctuation and month spelling don't matter. */
+function readsAs(text: string): string {
+  return normalizeText(text)
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .replace(/\b[a-z]+\b/g, (word) => MONTHS[word] ?? word)
+    .trim();
 }
 
 export function sanitizeRewrite(data: unknown, provider: LLMProvider): RewriteResult {
@@ -122,24 +145,39 @@ export function sanitizeRewrite(data: unknown, provider: LLMProvider): RewriteRe
     throw new LLMError("invalid_output", provider, "The model did not return an improved CV.");
   }
 
-  const suggestions: Suggestion[] = (Array.isArray(data.suggestions) ? data.suggestions : [])
+  const suggestions: RewriteSuggestion[] = (Array.isArray(data.suggestions) ? data.suggestions : [])
     .filter(isRecord)
     .filter((item) =>
       ["section", "original", "improved", "reason"].every((field) => typeof item[field] === "string")
     )
     .map((item) => ({
-      priority: PRIORITIES.has(item.priority as Suggestion["priority"])
-        ? (item.priority as Suggestion["priority"])
-        : "optional",
       section: item.section as string,
       original: item.original as string,
       improved: item.improved as string,
       reason: item.reason as string,
     }));
 
+  // Undo placeholder claims in the CV too, so they can't add keywords or score.
+  let improvedCv = data.improvedCv.trim();
+  for (const suggestion of suggestions) {
+    if (PLACEHOLDER.test(suggestion.improved) && !PLACEHOLDER.test(suggestion.original)) {
+      improvedCv = improvedCv.split(suggestion.improved).join(suggestion.original);
+    }
+  }
+
   return {
-    suggestions,
-    improvedCv: data.improvedCv.trim(),
+    suggestions: suggestions.filter(
+      (suggestion) =>
+        !(PLACEHOLDER.test(suggestion.improved) && !PLACEHOLDER.test(suggestion.original)) &&
+        // Same text to an ATS (e.g. "Sep. 2024" -> "Sep 2024"): not worth the user's time.
+        readsAs(suggestion.improved) !== readsAs(suggestion.original)
+    ),
+    improvedCv,
+    addedKeywords: (Array.isArray(data.addedKeywords) ? data.addedKeywords : [])
+      .filter(isRecord)
+      .filter((item) => typeof item.keyword === "string" && typeof item.evidence === "string")
+      .map((item) => ({ keyword: (item.keyword as string).trim(), evidence: (item.evidence as string).trim() }))
+      .slice(0, 30),
     unaddressedKeywords: stringList(data.unaddressedKeywords, 30),
   };
 }

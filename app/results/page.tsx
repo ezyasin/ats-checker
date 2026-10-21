@@ -152,6 +152,12 @@ export default function ResultsPage() {
                 </span>
               )}
             </p>
+            {result.unverifiedKeywords.length > 0 && (
+              <p className="mx-4 rounded-md border border-amber-200 bg-amber-50 p-2 text-xs leading-5 text-amber-900">
+                Not counted: the improved CV mentions {result.unverifiedKeywords.join(", ")} without evidence from your
+                CV. Remove {result.unverifiedKeywords.length === 1 ? "it" : "them"} unless you have that experience.
+              </p>
+            )}
           </Card>
 
           {/* Section Scores */}
@@ -187,6 +193,10 @@ export default function ResultsPage() {
 
           <TabsContent value="suggestions" className="mt-6">
             {/* Priority summary */}
+            <p className="mb-2 text-xs text-muted-foreground">
+              Ranked by the scoring engine: critical changes add a required keyword, important ones add a preferred
+              keyword or fix a structure problem, optional ones improve wording.
+            </p>
             <div className="mb-4 flex gap-4 text-sm">
               {criticalCount > 0 && (
                 <span className="text-red-600">
@@ -215,12 +225,8 @@ export default function ResultsPage() {
                   </CardContent>
                 </Card>
               ) : (
-                [...result.suggestions].sort((a, b) => {
-                  const order = { critical: 0, important: 1, optional: 2 };
-                  return order[a.priority] - order[b.priority];
-                })
-                .map((suggestion, i) => (
-                  <SuggestionCard key={i} suggestion={suggestion} />
+                result.suggestions.map((suggestion, i) => (
+                  <SuggestionCard key={i} suggestion={suggestion} evidence={result.keywordEvidence} />
                 ))
               )}
             </div>

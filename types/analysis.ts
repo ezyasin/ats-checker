@@ -2,12 +2,21 @@ import type { JobRequirements, ScoreResult } from "@/lib/scoring/types";
 
 export type { SectionScores as SectionScore } from "@/lib/scoring/types";
 
-export interface Suggestion {
-  priority: "critical" | "important" | "optional";
+/** A rewrite as the model returns it. */
+export interface RewriteSuggestion {
   section: string;
   original: string;
   improved: string;
   reason: string;
+}
+
+/** A rewrite ranked by the scoring engine (lib/suggestions.ts), not by the model. */
+export interface Suggestion extends RewriteSuggestion {
+  priority: "critical" | "important" | "optional";
+  /** Missing job keywords the change adds. */
+  adds: string[];
+  /** Labels of failed structure checks the change fixes. */
+  fixes: string[];
 }
 
 export interface ImprovementHistoryEntry {
@@ -34,6 +43,10 @@ export interface AnalysisResult {
   improvedScoring: ScoreResult;
   /** Missing keywords the rewrite could not add without inventing experience. */
   unaddressedKeywords: string[];
+  /** Missing keywords the rewrite added, with the CV quote that backs each one. */
+  keywordEvidence: Record<string, string>;
+  /** Added without evidence and still in the improved CV; not counted in its score. */
+  unverifiedKeywords: string[];
   improvementHistory?: ImprovementHistoryEntry[];
 }
 

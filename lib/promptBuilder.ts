@@ -1,4 +1,5 @@
 import type { ScoreResult } from "./scoring";
+import { findExtractionIssues } from "./scoring/extraction";
 
 const KEYWORD_CATEGORIES = ["hard_skill", "tool", "soft_skill", "certification", "domain"];
 const DEGREE_LEVELS = ["none", "high_school", "associate", "bachelor", "master", "doctorate"];
@@ -32,16 +33,15 @@ export const REQUIREMENTS_SCHEMA = {
 export const REWRITE_SCHEMA = {
   type: "object",
   additionalProperties: false,
-  required: ["suggestions", "improvedCv", "unaddressedKeywords"],
+  required: ["suggestions", "improvedCv", "addedKeywords", "unaddressedKeywords"],
   properties: {
     suggestions: {
       type: "array",
       items: {
         type: "object",
         additionalProperties: false,
-        required: ["priority", "section", "original", "improved", "reason"],
+        required: ["section", "original", "improved", "reason"],
         properties: {
-          priority: { type: "string", enum: ["critical", "important", "optional"] },
           section: { type: "string" },
           original: { type: "string" },
           improved: { type: "string" },
@@ -50,6 +50,18 @@ export const REWRITE_SCHEMA = {
       },
     },
     improvedCv: { type: "string" },
+    addedKeywords: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["keyword", "evidence"],
+        properties: {
+          keyword: { type: "string" },
+          evidence: { type: "string" },
+        },
+      },
+    },
     unaddressedKeywords: { type: "array", items: { type: "string" } },
   },
 } as const;
@@ -91,6 +103,12 @@ export function buildRewritePrompt(cvText: string, jobDescription: string, score
   const summaries = score.components.map(
     (component) => `- ${component.label}: ${component.score}/100. ${component.summary}`
   );
+  const garbled = findExtractionIssues(cvText).find((issue) => issue.kind === "mixed_case");
+  const extractionNote = garbled
+    ? `\n6. The CV text was extracted from a file, and odd capitalisation such as ${garbled.examples
+        .map((word) => `"${word}"`)
+        .join(", ")} comes from that extraction, not from the candidate. Write those words normally in improvedCv, but don't make suggestions about them or call them typos.`
+    : "";
 
   return `Improve this CV for the job post below.
 
@@ -112,13 +130,14 @@ Failed structure checks:
 ${failedChecks.length > 0 ? failedChecks.join("\n") : "- none"}
 
 Instructions:
-1. Add a missing keyword only where the CV already gives evidence for it, e.g. the CV says "Postgres" and the job says "PostgreSQL", or a described task clearly is that skill. Do not upgrade claims: "fixed accessibility issues" does not become "ensured WCAG compliance". List every missing keyword you could not add honestly in unaddressedKeywords.
+1. Add a missing keyword only where the CV already gives evidence for it, e.g. the CV says "Postgres" and the job says "PostgreSQL", or a described task clearly is that skill. Do not upgrade claims: "fixed accessibility issues" does not become "ensured WCAG compliance". List every missing keyword you could not add honestly in unaddressedKeywords. Never add placeholders, bracketed notes or "simulated" skills: if there is no evidence, leave the skill out.
+   For every missing keyword you do add, put it in addedKeywords with "evidence": a short quote copied word for word from the CV that shows the candidate has it. A program checks each quote against the CV and removes any keyword whose quote isn't found.
 2. Never change the candidate's job titles or seniority, including in the summary: a "Frontend Developer" stays a "Frontend Developer" even when applying for a "Senior Frontend Engineer" role. Describe the candidate's real experience in the summary instead.
-3. suggestions: 3 to 8 targeted rewrites, most impactful first. "original" must be copied verbatim from the CV; "improved" is the replacement; "reason" explains the ATS benefit in one sentence. Use priority "critical" for missing required keywords and structure problems.
+3. suggestions: 3 to 8 targeted rewrites, most impactful first. "original" must be copied verbatim from the CV; "improved" is the replacement; "reason" explains the ATS benefit in one sentence. Prefer changes that honestly add a missing keyword or fix a failed structure check. Don't suggest reformatting dates unless "Parseable dates" failed: the engine already reads formats like "Sep. 2024".
 4. improvedCv: the complete CV in markdown, applying all of your suggestions.
    - First line "# <Full Name>", then one line with the contact details from the CV (email, phone, location, links).
    - Standard "## " headings: Summary, Experience, Skills, Education, then Certifications, Projects or others the CV already has.
    - Keep every role, employer, date and degree from the original. Write role dates as "Mon YYYY – Mon YYYY" or "Mon YYYY – Present".
    - Bullet points start with "- ".
-5. Write in the same language as the CV.`;
+5. Write in the same language as the CV.${extractionNote}`;
 }
