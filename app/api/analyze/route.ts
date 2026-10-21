@@ -16,11 +16,13 @@ function llmErrorMessage(error: LLMError) {
     case "auth":
       return `${name} API key is missing or invalid.`;
     case "quota":
-      return `${name} quota is exhausted for the configured model. Switch models or try again later.`;
+      return `${name} has used up its daily quota for the configured models. Try again later, or use an API key with billing enabled.`;
     case "busy":
       return `${name} is temporarily busy. Please try the analysis again in a minute.`;
     case "refused":
       return `${name} declined to process this CV.`;
+    case "invalid_output":
+      return `${name} returned an incomplete response. Please try again.`;
     default:
       return `Failed to analyze with ${error.provider}. Please try again.`;
   }
@@ -88,6 +90,11 @@ function streamAnalysis(
         };
         send({ type: "result", result });
       } catch (error) {
+        // Log the cause for the terminal; the browser gets a short message.
+        console.error(
+          `[analyze] ${provider} failed:`,
+          error instanceof LLMError ? `(${error.kind}) ${error.message}` : error
+        );
         send({
           type: "error",
           error:
