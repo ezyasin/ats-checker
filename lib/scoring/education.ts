@@ -1,4 +1,5 @@
 import type { DegreeLevel } from "./types";
+import { normalizeText } from "./sections";
 
 export const DEGREE_RANK: Record<DegreeLevel, number> = {
   none: 0,
@@ -45,8 +46,9 @@ const DEGREE_PATTERNS: Array<[DegreeLevel, RegExp[]]> = [
 ];
 
 export function detectDegree(text: string): DegreeLevel {
+  const normalized = normalizeText(text);
   for (const [level, patterns] of DEGREE_PATTERNS) {
-    if (patterns.some((pattern) => pattern.test(text))) return level;
+    if (patterns.some((pattern) => pattern.test(normalized))) return level;
   }
   return "none";
 }

@@ -48,21 +48,24 @@ The LLM reads the job post and extracts structured requirements. Plain TypeScrip
 - [x] Keywords grouped by required vs preferred, with the alias that matched; hover shows where each one was found
 - [x] Note listing missing keywords the rewrite left out because the CV shows no evidence for them
 - [x] Before → after score for the improved CV
-- [ ] "What the ATS sees": show the raw extracted text, with detected sections highlighted
-- [ ] Editable requirements: untick a keyword or change the years, then re-score instantly in the browser (the engine is pure TS, so no LLM call is needed)
-- [ ] Trim the tab clutter: merge "ATS Tips" into contextual hints next to failed checks
+- [x] "What the ATS sees": the raw extracted text split into recognised sections, with warnings and highlights for garbled words (`iNTERN`, Turkish dotted İ), letter-spaced headings and icon-font glyphs
+- [x] Editable requirements: fix the job title, years, degree or keywords, and both CVs re-score and suggestions re-rank instantly in the browser (no LLM call)
+- [x] Trim the tab clutter: "ATS Tips" replaced by the ATS view (with a short, accurate tips list); Export merged into the Improved CV tab
 - [ ] Replace hard-coded `gray-*` / `text-red-600` colours with theme tokens so dark mode works everywhere
 - [ ] Mobile pass on the results page (tabs currently overflow on small screens)
 
 ## Phase 5: Honest rewrites
 - [x] Rewrite prompt forbids inventing skills, upgrading claims ("fixed accessibility issues" ≠ "WCAG compliance") or changing job titles and seniority. Verified on a live run
+- [x] Suggestion priority comes from the scoring engine (critical = adds a required keyword, important = preferred keyword or structure fix, optional = wording), not from the model
+- [x] Every keyword the rewrite adds must quote CV text as evidence; quotes are checked against the CV, and unproven additions are reverted or left unscored and flagged. A live run had added Kafka, Kubernetes, RabbitMQ and GCP with no evidence
+- [x] Placeholder claims ("simulated", "[add metric]"), cosmetic-only changes (`Sep. 2024` → `Sep 2024`) and repeated suggestions are dropped
 - [ ] Mark suggestions whose "original" text doesn't exist in the CV (the LLM paraphrased) and hide or fix them
 - [ ] "Do you have this skill?" checklist for missing required keywords, fed back into the rewrite
 - [ ] Keep the user's own wording where possible; show the rewrite as accept/reject per suggestion
 
 ## Phase 6: Later
-- [ ] Cover letter generation from the same requirements
+- [x] Cover letter generation from the same requirements (only skills the CV shows; no placeholders)
 - [ ] Browser extension: score a LinkedIn or Indeed job post against a saved CV in one click
-- [ ] Non-English CVs: section headers and degree names (e.g. Turkish "Deneyim", "Lisans")
+- [ ] Non-English CVs: section headers and degree names (e.g. Turkish "Deneyim", "Lisans"). Turkish dotted/dotless i is already normalised
 - [ ] Deploy (Cloudflare or Vercel). `proxy.ts` already rate-limits `/api/analyze`, but in memory, like the requirements cache. Both need a shared store (KV or Redis) once there's more than one server instance
 - [x] Show progress for the two LLM steps (extraction, rewrite) in the analyze page instead of a timed animation. The API streams each step as it starts, and the first score appears before the rewrite finishes

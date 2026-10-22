@@ -48,6 +48,13 @@ export function getAvailableProviders(): LLMProvider[] {
   return providers;
 }
 
+/** The requested provider if it's configured, else the default; null if none is configured. */
+export function resolveProvider(requested: unknown): LLMProvider | null {
+  const available = getAvailableProviders();
+  if (available.length === 0) return null;
+  return available.includes(requested as LLMProvider) ? (requested as LLMProvider) : getDefaultProvider();
+}
+
 export function getDefaultProvider(): LLMProvider {
   const preferred = (process.env.LLM_PROVIDER as LLMProvider) || "claude";
   const available = getAvailableProviders();

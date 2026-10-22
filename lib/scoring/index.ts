@@ -306,6 +306,8 @@ function scoreSections(
 export interface ScoreOptions {
   /** Reference date for "Present" in date ranges. */
   now?: Date;
+  /** Keywords a rewrite added without evidence: present in the text, scored as missing. */
+  unverifiedKeywords?: string[];
 }
 
 /** Score a CV against job requirements. Pure and deterministic. */
@@ -316,7 +318,12 @@ export function scoreCv(
 ): ScoreResult {
   const now = options.now ?? new Date();
   const sections = splitSections(cvText);
-  const keywordMatches = matchKeywords(requirements.keywords, sections);
+  const unverified = new Set(options.unverifiedKeywords ?? []);
+  const keywordMatches = matchKeywords(requirements.keywords, sections).map((match) =>
+    unverified.has(match.term) && match.matched
+      ? { ...match, matched: false, matchedAs: undefined, occurrences: 0, sections: [], unverified: true }
+      : match
+  );
 
   const ranges = findDateRanges(experienceSource(cvText, sections), now);
   const yearsOfExperience = totalYears(ranges);

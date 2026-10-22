@@ -1,7 +1,10 @@
 import { createHash } from "node:crypto";
 import {
+  buildCoverLetterPrompt,
   buildRequirementsPrompt,
   buildRewritePrompt,
+  COVER_LETTER_SCHEMA,
+  COVER_LETTER_SYSTEM,
   REQUIREMENTS_SCHEMA,
   REQUIREMENTS_SYSTEM,
   REWRITE_SCHEMA,
@@ -15,17 +18,17 @@ import type {
   RequirementKeyword,
   ScoreResult,
 } from "../scoring";
-import type { Suggestion } from "@/types/analysis";
+import { normalizeText } from "../scoring/sections";
+import type { RewriteSuggestion } from "@/types/analysis";
 import { LLMClient, LLMError, LLMProvider } from "./types";
 
-// Bump when the extraction prompt changes so cached requirements are refreshed.
-const REQUIREMENTS_VERSION = 2;
+// Bump when extraction changes so cached requirements are refreshed.
+const REQUIREMENTS_VERSION = 3;
 const CACHE_LIMIT = 200;
 const requirementsCache = new Map<string, JobRequirements>();
 
 const CATEGORIES = new Set<KeywordCategory>(["hard_skill", "tool", "soft_skill", "certification", "domain"]);
 const DEGREES = new Set<DegreeLevel>(["none", "high_school", "associate", "bachelor", "master", "doctorate"]);
-const PRIORITIES = new Set<Suggestion["priority"]>(["critical", "important", "optional"]);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -71,6 +74,30 @@ export function sanitizeRequirements(data: unknown, provider: LLMProvider): JobR
   };
 }
 
+const NUMBER_WORDS: Record<string, number> = {
+  one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10,
+  eleven: 11, twelve: 12, fifteen: 15,
+};
+const NUMBER = `\\d{1,2}|${Object.keys(NUMBER_WORDS).join("|")}`;
+// "3+ years", "3-5 years", "3 to 5 yrs", "five years", "3 yıl"; the first number is the minimum.
+const YEARS_PHRASE = new RegExp(
+  `\\b(${NUMBER})\\s*\\+?\\s*(?:(?:-|–|to)\\s*(?:${NUMBER})\\s*\\+?\\s*)?(?:years?|yrs?|yıl)\\b`,
+  "gi"
+);
+
+/**
+ * Models misread numbers: Gemini 2.5 Flash returned 36 for "3+ years". Keep
+ * the model's minimum only if the post actually states it; otherwise use the
+ * smallest year figure the post mentions.
+ */
+export function reconcileYears(modelYears: number, jobDescription: string): number {
+  const stated = [...jobDescription.matchAll(YEARS_PHRASE)]
+    .map((match) => NUMBER_WORDS[match[1].toLowerCase()] ?? Number(match[1]))
+    .filter((years) => years > 0 && years <= 30);
+  if (modelYears === 0 || stated.length === 0 || stated.includes(modelYears)) return modelYears;
+  return Math.min(...stated);
+}
+
 /**
  * Extract structured requirements from a job post. Results are cached per
  * provider + job post, so re-analysing against the same post reuses the exact
@@ -98,7 +125,11 @@ export async function extractRequirements(
     maxTokens: 8000,
     effort: "low",
   });
-  const requirements = sanitizeRequirements(data, provider);
+  const sanitized = sanitizeRequirements(data, provider);
+  const requirements = {
+    ...sanitized,
+    minYearsExperience: reconcileYears(sanitized.minYearsExperience, jobDescription),
+  };
   if (requirements.keywords.length === 0) {
     throw new LLMError("invalid_output", provider, "No keywords could be extracted from the job post.");
   }
@@ -111,10 +142,33 @@ export async function extractRequirements(
   return requirements;
 }
 
+export interface AddedKeyword {
+  keyword: string;
+  /** The model's verbatim quote from the CV; checked in lib/verifyRewrite.ts. */
+  evidence: string;
+}
+
 export interface RewriteResult {
-  suggestions: Suggestion[];
+  suggestions: RewriteSuggestion[];
   improvedCv: string;
+  addedKeywords: AddedKeyword[];
   unaddressedKeywords: string[];
+}
+
+// A model hedging an invented claim: "Message Queues (simulated)", "[add metric]".
+const PLACEHOLDER = /\b(placeholders?|simulated|hypothetical|tbd|todo|if applicable)\b|\[[^\]]*\]/i;
+
+const MONTHS: Record<string, string> = {
+  january: "jan", february: "feb", march: "mar", april: "apr", june: "jun", july: "jul",
+  august: "aug", september: "sep", sept: "sep", october: "oct", november: "nov", december: "dec",
+};
+
+/** Text as the scoring engine reads it: case, punctuation and month spelling don't matter. */
+function readsAs(text: string): string {
+  return normalizeText(text)
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .replace(/\b[a-z]+\b/g, (word) => MONTHS[word] ?? word)
+    .trim();
 }
 
 export function sanitizeRewrite(data: unknown, provider: LLMProvider): RewriteResult {
@@ -122,24 +176,45 @@ export function sanitizeRewrite(data: unknown, provider: LLMProvider): RewriteRe
     throw new LLMError("invalid_output", provider, "The model did not return an improved CV.");
   }
 
-  const suggestions: Suggestion[] = (Array.isArray(data.suggestions) ? data.suggestions : [])
+  const suggestions: RewriteSuggestion[] = (Array.isArray(data.suggestions) ? data.suggestions : [])
     .filter(isRecord)
     .filter((item) =>
       ["section", "original", "improved", "reason"].every((field) => typeof item[field] === "string")
     )
     .map((item) => ({
-      priority: PRIORITIES.has(item.priority as Suggestion["priority"])
-        ? (item.priority as Suggestion["priority"])
-        : "optional",
       section: item.section as string,
       original: item.original as string,
       improved: item.improved as string,
       reason: item.reason as string,
     }));
 
+  // Undo placeholder claims in the CV too, so they can't add keywords or score.
+  let improvedCv = data.improvedCv.trim();
+  for (const suggestion of suggestions) {
+    if (PLACEHOLDER.test(suggestion.improved) && !PLACEHOLDER.test(suggestion.original)) {
+      improvedCv = improvedCv.split(suggestion.improved).join(suggestion.original);
+    }
+  }
+
+  // Models sometimes repeat a suggestion for the same line; keep the first.
+  const seen = new Set<string>();
   return {
-    suggestions,
-    improvedCv: data.improvedCv.trim(),
+    suggestions: suggestions.filter((suggestion) => {
+      const key = readsAs(suggestion.original);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return (
+        !(PLACEHOLDER.test(suggestion.improved) && !PLACEHOLDER.test(suggestion.original)) &&
+        // Same text to an ATS (e.g. "Sep. 2024" -> "Sep 2024"): not worth the user's time.
+        readsAs(suggestion.improved) !== readsAs(suggestion.original)
+      );
+    }),
+    improvedCv,
+    addedKeywords: (Array.isArray(data.addedKeywords) ? data.addedKeywords : [])
+      .filter(isRecord)
+      .filter((item) => typeof item.keyword === "string" && typeof item.evidence === "string")
+      .map((item) => ({ keyword: (item.keyword as string).trim(), evidence: (item.evidence as string).trim() }))
+      .slice(0, 30),
     unaddressedKeywords: stringList(data.unaddressedKeywords, 30),
   };
 }
@@ -160,4 +235,38 @@ export async function rewriteCv(
     effort: "medium",
   });
   return sanitizeRewrite(data, provider);
+}
+
+// A letter shorter than this isn't a cover letter; a bracket is an unfilled placeholder.
+const MIN_LETTER_WORDS = 120;
+const LETTER_PLACEHOLDER = /\[[^\]]+\]/;
+
+export function sanitizeCoverLetter(data: unknown, provider: LLMProvider): string {
+  const letter = isRecord(data) && typeof data.letter === "string" ? data.letter.trim() : "";
+  if (letter.split(/\s+/).length < MIN_LETTER_WORDS) {
+    throw new LLMError("invalid_output", provider, "The model returned a cover letter that is too short.");
+  }
+  if (LETTER_PLACEHOLDER.test(letter)) {
+    throw new LLMError("invalid_output", provider, "The model left a placeholder such as [Company] in the letter.");
+  }
+  return letter;
+}
+
+export async function writeCoverLetter(
+  client: LLMClient,
+  provider: LLMProvider,
+  cvText: string,
+  jobDescription: string,
+  score: ScoreResult
+): Promise<string> {
+  const data = await client.generateJson({
+    name: "cover_letter",
+    system: COVER_LETTER_SYSTEM,
+    prompt: buildCoverLetterPrompt(cvText, jobDescription, score),
+    schema: COVER_LETTER_SCHEMA,
+    maxTokens: 6000,
+    effort: "medium",
+    varied: true,
+  });
+  return sanitizeCoverLetter(data, provider);
 }

@@ -18,6 +18,11 @@ export interface JsonRequest {
   maxTokens: number;
   /** "low" for extraction, "medium" for writing. Providers without effort ignore it. */
   effort: "low" | "medium";
+  /**
+   * Allow a different answer on every call, e.g. "write again" on a cover
+   * letter. Everything the score depends on stays at temperature 0.
+   */
+  varied?: boolean;
 }
 
 export interface LLMClient {
