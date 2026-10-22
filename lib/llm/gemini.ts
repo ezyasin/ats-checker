@@ -35,7 +35,7 @@ export class GeminiClient implements LLMClient {
         model,
         systemInstruction: request.system,
         generationConfig: {
-          temperature: 0,
+          temperature: request.varied ? 1 : 0,
           responseMimeType: "application/json",
           responseSchema: toGeminiSchema(request.schema),
           maxOutputTokens: request.maxTokens,

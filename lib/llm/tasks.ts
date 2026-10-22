@@ -1,7 +1,10 @@
 import { createHash } from "node:crypto";
 import {
+  buildCoverLetterPrompt,
   buildRequirementsPrompt,
   buildRewritePrompt,
+  COVER_LETTER_SCHEMA,
+  COVER_LETTER_SYSTEM,
   REQUIREMENTS_SCHEMA,
   REQUIREMENTS_SYSTEM,
   REWRITE_SCHEMA,
@@ -232,4 +235,38 @@ export async function rewriteCv(
     effort: "medium",
   });
   return sanitizeRewrite(data, provider);
+}
+
+// A letter shorter than this isn't a cover letter; a bracket is an unfilled placeholder.
+const MIN_LETTER_WORDS = 120;
+const LETTER_PLACEHOLDER = /\[[^\]]+\]/;
+
+export function sanitizeCoverLetter(data: unknown, provider: LLMProvider): string {
+  const letter = isRecord(data) && typeof data.letter === "string" ? data.letter.trim() : "";
+  if (letter.split(/\s+/).length < MIN_LETTER_WORDS) {
+    throw new LLMError("invalid_output", provider, "The model returned a cover letter that is too short.");
+  }
+  if (LETTER_PLACEHOLDER.test(letter)) {
+    throw new LLMError("invalid_output", provider, "The model left a placeholder such as [Company] in the letter.");
+  }
+  return letter;
+}
+
+export async function writeCoverLetter(
+  client: LLMClient,
+  provider: LLMProvider,
+  cvText: string,
+  jobDescription: string,
+  score: ScoreResult
+): Promise<string> {
+  const data = await client.generateJson({
+    name: "cover_letter",
+    system: COVER_LETTER_SYSTEM,
+    prompt: buildCoverLetterPrompt(cvText, jobDescription, score),
+    schema: COVER_LETTER_SCHEMA,
+    maxTokens: 6000,
+    effort: "medium",
+    varied: true,
+  });
+  return sanitizeCoverLetter(data, provider);
 }

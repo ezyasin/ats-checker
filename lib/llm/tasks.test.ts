@@ -1,8 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
-import { buildRewritePrompt } from "../promptBuilder";
+import { buildCoverLetterPrompt, buildRewritePrompt } from "../promptBuilder";
 import { scoreCv } from "../scoring";
 import { FRONTEND_JOB, WEAK_CV } from "../scoring/fixtures";
-import { extractRequirements, reconcileYears, sanitizeRequirements, sanitizeRewrite } from "./tasks";
+import {
+  extractRequirements,
+  reconcileYears,
+  sanitizeCoverLetter,
+  sanitizeRequirements,
+  sanitizeRewrite,
+} from "./tasks";
 import { LLMError, parseJsonObject, type LLMClient } from "./types";
 
 describe("sanitizeRequirements", () => {
@@ -158,5 +164,22 @@ describe("buildRewritePrompt", () => {
     const cv = `${WEAK_CV}\nBACKEND DEVELOPER iNTERN Feb. 2024 - Sep. 2024`;
     expect(buildRewritePrompt(cv, "job post", scoreCv(cv, FRONTEND_JOB))).toContain('"iNTERN" comes from that extraction');
     expect(buildRewritePrompt(WEAK_CV, "job post", scoreCv(WEAK_CV, FRONTEND_JOB))).not.toContain("extraction");
+  });
+});
+
+describe("cover letter", () => {
+  it("tells the model which job skills it may and may not claim", () => {
+    const prompt = buildCoverLetterPrompt(WEAK_CV, "job post", scoreCv(WEAK_CV, FRONTEND_JOB));
+    const notShown = prompt.slice(prompt.indexOf("does not show"));
+    expect(notShown).toContain("React, TypeScript, Next.js");
+    expect(prompt).toContain("Never write placeholders");
+  });
+
+  it("rejects short letters and unfilled placeholders", () => {
+    const body = Array(130).fill("word").join(" ");
+    expect(sanitizeCoverLetter({ letter: ` ${body} ` }, "gemini")).toBe(body);
+    expect(() => sanitizeCoverLetter({ letter: "Dear Hiring Manager, I fit." }, "gemini")).toThrow(LLMError);
+    expect(() => sanitizeCoverLetter({ letter: `${body} at [Company]` }, "gemini")).toThrow(/placeholder/);
+    expect(() => sanitizeCoverLetter({}, "gemini")).toThrow(LLMError);
   });
 });

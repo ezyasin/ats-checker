@@ -3,7 +3,8 @@ import { extractTextFromPdf } from "@/lib/parsers/pdf";
 import { extractTextFromDocx } from "@/lib/parsers/docx";
 import { extractTextFromLatex } from "@/lib/parsers/latex";
 import { validateFileBytes, validateJobDescription } from "@/lib/validators";
-import { createLLMClient, getAvailableProviders, getDefaultProvider } from "@/lib/llm/factory";
+import { createLLMClient, resolveProvider } from "@/lib/llm/factory";
+import { llmErrorMessage } from "@/lib/llm/errorMessages";
 import { extractRequirements, rewriteCv } from "@/lib/llm/tasks";
 import { LLMError, describeLLMError, type LLMClient, type LLMProvider } from "@/lib/llm/types";
 import { scoreCv } from "@/lib/scoring";
@@ -11,32 +12,6 @@ import { prioritizeSuggestions } from "@/lib/suggestions";
 import { verifyRewrite } from "@/lib/verifyRewrite";
 import { ANALYSIS_STREAM_CONTENT_TYPE, encodeEvent, type AnalysisEvent } from "@/lib/analysisStream";
 import type { AnalysisResult } from "@/types/analysis";
-
-const MODEL_ENV: Record<LLMProvider, string> = {
-  claude: "CLAUDE_MODEL",
-  gemini: "GEMINI_MODEL",
-  openai: "OPENAI_MODEL",
-};
-
-function llmErrorMessage(error: LLMError) {
-  const name = error.provider.toUpperCase();
-  switch (error.kind) {
-    case "model":
-      return `The configured ${name} model isn't available. Check ${MODEL_ENV[error.provider]} in .env.local.`;
-    case "auth":
-      return `${name} API key is missing or invalid.`;
-    case "quota":
-      return `${name} has used up its daily quota for the configured models. Try again later, or use an API key with billing enabled.`;
-    case "busy":
-      return `${name} is temporarily busy. Please try the analysis again in a minute.`;
-    case "refused":
-      return `${name} declined to process this CV.`;
-    case "invalid_output":
-      return `${name} returned an incomplete response. Please try again.`;
-    default:
-      return `Failed to analyze with ${error.provider}. Please try again.`;
-  }
-}
 
 /**
  * Runs the LLM steps after the response has started, reporting each step as
@@ -148,22 +123,15 @@ export async function POST(request: NextRequest) {
     const formData = await request.formData();
     const file = formData.get("cv") as File | null;
     const rawJobDescription = formData.get("jobDescription");
-    const providerParam = formData.get("provider") as string | null;
     const jobDescription =
       typeof rawJobDescription === "string" ? rawJobDescription.trim() : "";
 
-    let provider: LLMProvider = (providerParam as LLMProvider) || getDefaultProvider();
-    const available = getAvailableProviders();
-
-    if (available.length === 0) {
+    const provider = resolveProvider(formData.get("provider"));
+    if (!provider) {
       return NextResponse.json(
         { error: "No AI provider is configured on the server." },
         { status: 503 }
       );
-    }
-
-    if (!available.includes(provider)) {
-      provider = getDefaultProvider();
     }
 
     if (!file) {

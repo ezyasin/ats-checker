@@ -141,3 +141,39 @@ Instructions:
    - Bullet points start with "- ".
 5. Write in the same language as the CV.${extractionNote}`;
 }
+
+export const COVER_LETTER_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["letter"],
+  properties: { letter: { type: "string" } },
+} as const;
+
+export const COVER_LETTER_SYSTEM = `You write cover letters for job applications using only facts stated in the candidate's CV. You never invent employers, titles, dates, numbers, skills or motivations the CV doesn't support. A specific, honest letter beats an impressive-sounding one.`;
+
+export function buildCoverLetterPrompt(cvText: string, jobDescription: string, score: ScoreResult): string {
+  const shown = score.keywordMatches.filter((match) => match.matched).map((match) => match.term);
+  const notShown = score.keywordMatches.filter((match) => !match.matched).map((match) => match.term);
+
+  return `Write a cover letter for this candidate and job.
+
+<job_post>
+${jobDescription}
+</job_post>
+
+<cv>
+${cvText}
+</cv>
+
+Skills from the job post that the CV shows: ${shown.length > 0 ? shown.join(", ") : "none"}.
+Skills from the job post that the CV does not show, which you must not claim: ${notShown.length > 0 ? notShown.join(", ") : "none"}.
+
+Instructions:
+1. 250 to 350 words in 3 or 4 paragraphs. Plain text: no markdown, no bullet points, no subject line.
+2. Open with the role, by its title in the job post, and one concrete reason the candidate fits, taken from the CV.
+3. In the middle, connect two or three specific achievements from the CV to what the job asks for. Use numbers only where the CV states them.
+4. Use the company's name if the post gives it. Never write placeholders such as [Company] or [Hiring Manager].
+5. Start with "Dear Hiring Manager," unless the post names a contact person, and end with "Sincerely," followed by the candidate's name from the CV.
+6. Don't mention missing skills, apologise for gaps, or claim experience the CV doesn't show. Don't invent reasons for wanting the job beyond what the post says about the role.
+7. Write in the language of the job post.`;
+}

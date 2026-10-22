@@ -4,6 +4,7 @@ const rateLimit = new Map<string, { count: number; resetTime: number }>();
 
 const WINDOW_MS = 60 * 60 * 1000; // 1 hour
 const MAX_REQUESTS = 25;
+const LLM_ROUTES = ["/api/analyze", "/api/cover-letter"];
 
 function getRateLimitInfo(ip: string) {
   const now = Date.now();
@@ -19,8 +20,8 @@ function getRateLimitInfo(ip: string) {
 }
 
 export function proxy(request: NextRequest) {
-  // Only rate limit the analyze API
-  if (!request.nextUrl.pathname.startsWith("/api/analyze")) {
+  // Only rate limit the routes that call an LLM; they share one budget per IP.
+  if (!LLM_ROUTES.some((route) => request.nextUrl.pathname.startsWith(route))) {
     return NextResponse.next();
   }
 

@@ -8,6 +8,7 @@ import { scoreCv } from "@/lib/scoring";
 import type { JobRequirements } from "@/lib/scoring/types";
 import { prioritizeSuggestions } from "@/lib/suggestions";
 import { RequirementsEditor } from "@/components/RequirementsEditor";
+import { CoverLetter } from "@/components/CoverLetter";
 import { ScoreGauge } from "@/components/ScoreGauge";
 import { KeywordBreakdown } from "@/components/KeywordBreakdown";
 import { SuggestionCard } from "@/components/SuggestionCard";
@@ -59,6 +60,8 @@ function ResultsContent({ result }: { result: AnalysisResult }) {
   // null until the user edits the requirements; then this page re-scores locally.
   const [editedRequirements, setEditedRequirements] = useState<JobRequirements | null>(null);
   const requirements = editedRequirements ?? result.requirements;
+  // Kept here so switching tabs doesn't lose the letter or the user's edits to it.
+  const [coverLetter, setCoverLetter] = useState<string | null>(null);
 
   const scoring = useMemo(
     () => (editedRequirements ? scoreCv(result.originalCv, editedRequirements) : result.scoring),
@@ -215,13 +218,14 @@ function ResultsContent({ result }: { result: AnalysisResult }) {
 
         {/* Suggestions & Improved CV */}
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid h-auto w-full grid-cols-2 sm:grid-cols-4">
+          <TabsList className="grid h-auto w-full grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
             <TabsTrigger value="suggestions">
               Suggestions ({suggestions.length})
             </TabsTrigger>
             <TabsTrigger value="ats-view">What the ATS sees</TabsTrigger>
             <TabsTrigger value="diff">Changes</TabsTrigger>
             <TabsTrigger value="improved-cv">Improved CV</TabsTrigger>
+            <TabsTrigger value="cover-letter">Cover letter</TabsTrigger>
           </TabsList>
 
           <TabsContent value="suggestions" className="mt-6">
@@ -282,6 +286,15 @@ function ResultsContent({ result }: { result: AnalysisResult }) {
                 )}
               </CardContent>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="cover-letter" className="mt-6">
+            <CoverLetter
+              cvText={result.originalCv}
+              requirements={requirements}
+              letter={coverLetter}
+              onLetterChange={setCoverLetter}
+            />
           </TabsContent>
 
           <TabsContent value="ats-view" className="mt-6">

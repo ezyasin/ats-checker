@@ -29,7 +29,7 @@ export class OpenAIClient implements LLMClient {
         },
         max_completion_tokens: request.maxTokens,
         // Reasoning models (o-series, gpt-5) only accept the default temperature.
-        ...(model.startsWith("gpt-4") ? { temperature: 0 } : {}),
+        ...(model.startsWith("gpt-4") ? { temperature: request.varied ? 0.9 : 0 } : {}),
       });
 
       const choice = completion.choices[0];
