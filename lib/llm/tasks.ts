@@ -19,8 +19,8 @@ import { normalizeText } from "../scoring/sections";
 import type { RewriteSuggestion } from "@/types/analysis";
 import { LLMClient, LLMError, LLMProvider } from "./types";
 
-// Bump when the extraction prompt changes so cached requirements are refreshed.
-const REQUIREMENTS_VERSION = 2;
+// Bump when extraction changes so cached requirements are refreshed.
+const REQUIREMENTS_VERSION = 3;
 const CACHE_LIMIT = 200;
 const requirementsCache = new Map<string, JobRequirements>();
 
@@ -71,6 +71,30 @@ export function sanitizeRequirements(data: unknown, provider: LLMProvider): JobR
   };
 }
 
+const NUMBER_WORDS: Record<string, number> = {
+  one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10,
+  eleven: 11, twelve: 12, fifteen: 15,
+};
+const NUMBER = `\\d{1,2}|${Object.keys(NUMBER_WORDS).join("|")}`;
+// "3+ years", "3-5 years", "3 to 5 yrs", "five years", "3 yıl"; the first number is the minimum.
+const YEARS_PHRASE = new RegExp(
+  `\\b(${NUMBER})\\s*\\+?\\s*(?:(?:-|–|to)\\s*(?:${NUMBER})\\s*\\+?\\s*)?(?:years?|yrs?|yıl)\\b`,
+  "gi"
+);
+
+/**
+ * Models misread numbers: Gemini 2.5 Flash returned 36 for "3+ years". Keep
+ * the model's minimum only if the post actually states it; otherwise use the
+ * smallest year figure the post mentions.
+ */
+export function reconcileYears(modelYears: number, jobDescription: string): number {
+  const stated = [...jobDescription.matchAll(YEARS_PHRASE)]
+    .map((match) => NUMBER_WORDS[match[1].toLowerCase()] ?? Number(match[1]))
+    .filter((years) => years > 0 && years <= 30);
+  if (modelYears === 0 || stated.length === 0 || stated.includes(modelYears)) return modelYears;
+  return Math.min(...stated);
+}
+
 /**
  * Extract structured requirements from a job post. Results are cached per
  * provider + job post, so re-analysing against the same post reuses the exact
@@ -98,7 +122,11 @@ export async function extractRequirements(
     maxTokens: 8000,
     effort: "low",
   });
-  const requirements = sanitizeRequirements(data, provider);
+  const sanitized = sanitizeRequirements(data, provider);
+  const requirements = {
+    ...sanitized,
+    minYearsExperience: reconcileYears(sanitized.minYearsExperience, jobDescription),
+  };
   if (requirements.keywords.length === 0) {
     throw new LLMError("invalid_output", provider, "No keywords could be extracted from the job post.");
   }
@@ -165,13 +193,19 @@ export function sanitizeRewrite(data: unknown, provider: LLMProvider): RewriteRe
     }
   }
 
+  // Models sometimes repeat a suggestion for the same line; keep the first.
+  const seen = new Set<string>();
   return {
-    suggestions: suggestions.filter(
-      (suggestion) =>
+    suggestions: suggestions.filter((suggestion) => {
+      const key = readsAs(suggestion.original);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return (
         !(PLACEHOLDER.test(suggestion.improved) && !PLACEHOLDER.test(suggestion.original)) &&
         // Same text to an ATS (e.g. "Sep. 2024" -> "Sep 2024"): not worth the user's time.
         readsAs(suggestion.improved) !== readsAs(suggestion.original)
-    ),
+      );
+    }),
     improvedCv,
     addedKeywords: (Array.isArray(data.addedKeywords) ? data.addedKeywords : [])
       .filter(isRecord)

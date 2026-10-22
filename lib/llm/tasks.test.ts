@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { buildRewritePrompt } from "../promptBuilder";
 import { scoreCv } from "../scoring";
 import { FRONTEND_JOB, WEAK_CV } from "../scoring/fixtures";
-import { extractRequirements, sanitizeRequirements, sanitizeRewrite } from "./tasks";
+import { extractRequirements, reconcileYears, sanitizeRequirements, sanitizeRewrite } from "./tasks";
 import { LLMError, parseJsonObject, type LLMClient } from "./types";
 
 describe("sanitizeRequirements", () => {
@@ -42,7 +42,7 @@ describe("sanitizeRewrite", () => {
       {
         suggestions: [
           { priority: "critical", section: "Skills", original: "a", improved: "b", reason: "c" },
-          { priority: "urgent", section: "Summary", original: "a", improved: "b", reason: "c" },
+          { priority: "urgent", section: "Summary", original: "x", improved: "y", reason: "c" },
           { priority: "critical", section: "Skills", original: 1 },
         ],
         improvedCv: "# Jane\n",
@@ -90,6 +90,37 @@ describe("sanitizeRewrite filters", () => {
       "gemini"
     );
     expect(result.suggestions.map((suggestion) => suggestion.section)).toEqual(["Summary"]);
+  });
+
+  it("keeps only the first suggestion for the same original line", () => {
+    const result = sanitizeRewrite(
+      {
+        suggestions: [
+          { section: "Summary", original: "Backend developer", improved: "Backend developer building Go services", reason: "r" },
+          { section: "Summary", original: "Backend developer.", improved: "Backend developer with Go and AWS", reason: "r" },
+        ],
+        improvedCv: "# Alex",
+        unaddressedKeywords: [],
+      },
+      "gemini"
+    );
+    expect(result.suggestions).toHaveLength(1);
+    expect(result.suggestions[0].improved).toBe("Backend developer building Go services");
+  });
+});
+
+describe("reconcileYears", () => {
+  it("replaces a misread minimum with the figure the post states", () => {
+    // Gemini 2.5 Flash returned 36 for this line.
+    expect(reconcileYears(36, "- 3+ years of professional backend development experience")).toBe(3);
+    expect(reconcileYears(7, "At least five years in a similar role")).toBe(5);
+  });
+
+  it("keeps the model's value when the post states it, or states nothing", () => {
+    expect(reconcileYears(5, "5+ years of React")).toBe(5);
+    expect(reconcileYears(4, "3-5 years overall, 4 years leading teams")).toBe(4);
+    expect(reconcileYears(3, "Experience with Go in production")).toBe(3);
+    expect(reconcileYears(0, "Founded 20 years ago")).toBe(0);
   });
 });
 

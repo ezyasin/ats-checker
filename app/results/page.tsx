@@ -1,8 +1,13 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAnalysisStore } from "@/store/analysis";
+import type { AnalysisResult } from "@/types/analysis";
+import { scoreCv } from "@/lib/scoring";
+import type { JobRequirements } from "@/lib/scoring/types";
+import { prioritizeSuggestions } from "@/lib/suggestions";
+import { RequirementsEditor } from "@/components/RequirementsEditor";
 import { ScoreGauge } from "@/components/ScoreGauge";
 import { KeywordBreakdown } from "@/components/KeywordBreakdown";
 import { SuggestionCard } from "@/components/SuggestionCard";
@@ -27,13 +32,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 
 export default function ResultsPage() {
   const router = useRouter();
-  const { result, reset } = useAnalysisStore();
-  const [activeTab, setActiveTab] = useState("suggestions");
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  // The store isn't persisted, so server and first client render agree: no result.
+  const result = useAnalysisStore((state) => state.result);
 
   useEffect(() => {
     if (!result) {
@@ -41,7 +41,7 @@ export default function ResultsPage() {
     }
   }, [result, router]);
 
-  if (!result || !mounted) {
+  if (!result) {
     return (
       <div className="flex flex-1 items-center justify-center min-h-screen">
         <p className="text-muted-foreground">Loading...</p>
@@ -49,18 +49,39 @@ export default function ResultsPage() {
     );
   }
 
-  const criticalCount = result.suggestions.filter(
-    (s) => s.priority === "critical"
-  ).length;
-  const importantCount = result.suggestions.filter(
-    (s) => s.priority === "important"
-  ).length;
-  const optionalCount = result.suggestions.filter(
-    (s) => s.priority === "optional"
-  ).length;
+  return <ResultsContent result={result} />;
+}
+
+function ResultsContent({ result }: { result: AnalysisResult }) {
+  const router = useRouter();
+  const reset = useAnalysisStore((state) => state.reset);
+  const [activeTab, setActiveTab] = useState("suggestions");
+  // null until the user edits the requirements; then this page re-scores locally.
+  const [editedRequirements, setEditedRequirements] = useState<JobRequirements | null>(null);
+  const requirements = editedRequirements ?? result.requirements;
+
+  const scoring = useMemo(
+    () => (editedRequirements ? scoreCv(result.originalCv, editedRequirements) : result.scoring),
+    [editedRequirements, result]
+  );
+  const improvedScoring = useMemo(
+    () =>
+      editedRequirements
+        ? scoreCv(result.improvedCv, editedRequirements, { unverifiedKeywords: result.unverifiedKeywords })
+        : result.improvedScoring,
+    [editedRequirements, result]
+  );
+  const suggestions = useMemo(
+    () => (editedRequirements ? prioritizeSuggestions(result.suggestions, editedRequirements, scoring) : result.suggestions),
+    [editedRequirements, result, scoring]
+  );
+
+  const criticalCount = suggestions.filter((s) => s.priority === "critical").length;
+  const importantCount = suggestions.filter((s) => s.priority === "important").length;
+  const optionalCount = suggestions.filter((s) => s.priority === "optional").length;
   const improvedCv = result.improvedCv;
-  const improvedScore = result.improvedScoring.total;
-  const scoreDelta = improvedScore - result.atsScore;
+  const improvedScore = improvedScoring.total;
+  const scoreDelta = improvedScore - scoring.total;
 
   async function handleExport(format: "docx" | "txt" | "tex") {
     try {
@@ -135,7 +156,7 @@ export default function ResultsPage() {
         <div className="grid gap-8 md:grid-cols-3">
           {/* Score Gauge */}
           <Card className="flex flex-col items-center justify-center gap-4 py-8">
-            <ScoreGauge score={result.atsScore} verdict={result.verdict} />
+            <ScoreGauge score={scoring.total} verdict={scoring.verdict} />
             <p className="px-4 text-center text-sm text-muted-foreground">
               Improved CV scores{" "}
               <span className="font-semibold text-foreground">{improvedScore}</span>
@@ -152,6 +173,9 @@ export default function ResultsPage() {
                 </span>
               )}
             </p>
+            {editedRequirements && (
+              <p className="px-4 text-center text-xs text-blue-700">Re-scored with your edited requirements.</p>
+            )}
             {result.unverifiedKeywords.length > 0 && (
               <p className="mx-4 rounded-md border border-amber-200 bg-amber-50 p-2 text-xs leading-5 text-amber-900">
                 Not counted: the improved CV mentions {result.unverifiedKeywords.join(", ")} without evidence from your
@@ -162,19 +186,28 @@ export default function ResultsPage() {
 
           {/* Section Scores */}
           <div className="md:col-span-2">
-            <SectionScores scores={result.sectionScores} />
+            <SectionScores scores={scoring.sectionScores} />
           </div>
         </div>
 
         <div className="mt-8">
-          <ScoreBreakdown scoring={result.scoring} />
+          <RequirementsEditor
+            requirements={requirements}
+            edited={editedRequirements !== null}
+            onChange={setEditedRequirements}
+            onReset={() => setEditedRequirements(null)}
+          />
+        </div>
+
+        <div className="mt-8">
+          <ScoreBreakdown scoring={scoring} />
         </div>
 
         <Separator className="my-8" />
 
         {/* Keywords */}
         <KeywordBreakdown
-          matches={result.scoring.keywordMatches}
+          matches={scoring.keywordMatches}
           unaddressed={result.unaddressedKeywords}
         />
 
@@ -184,7 +217,7 @@ export default function ResultsPage() {
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="grid h-auto w-full grid-cols-2 sm:grid-cols-4">
             <TabsTrigger value="suggestions">
-              Suggestions ({result.suggestions.length})
+              Suggestions ({suggestions.length})
             </TabsTrigger>
             <TabsTrigger value="ats-view">What the ATS sees</TabsTrigger>
             <TabsTrigger value="diff">Changes</TabsTrigger>
@@ -216,7 +249,7 @@ export default function ResultsPage() {
             </div>
 
             <div className="grid gap-4">
-              {result.suggestions.length === 0 ? (
+              {suggestions.length === 0 ? (
                 <Card>
                   <CardContent className="py-8">
                     <p className="text-center text-muted-foreground">
@@ -225,7 +258,7 @@ export default function ResultsPage() {
                   </CardContent>
                 </Card>
               ) : (
-                result.suggestions.map((suggestion, i) => (
+                suggestions.map((suggestion, i) => (
                   <SuggestionCard key={i} suggestion={suggestion} evidence={result.keywordEvidence} />
                 ))
               )}
@@ -291,7 +324,7 @@ export default function ResultsPage() {
         <div className="mt-8">
           <h2 className="text-2xl font-bold mb-6">Your Progress</h2>
           <ImprovementHistory 
-            currentScore={result.atsScore} 
+            currentScore={scoring.total}
             history={result.improvementHistory}
           />
         </div>
