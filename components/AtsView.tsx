@@ -52,10 +52,15 @@ function issueCopy(issue: ExtractionIssue): { title: string; body: string } {
         title: "Letter-spaced text was read as separate letters",
         body: `${quote(issue.examples)} reads as single letters, so an ATS can't recognise it as a heading or keyword. Remove the letter spacing from those headings.`,
       };
+    case "missing_dash":
+      return {
+        title: `The dash between your dates was lost`,
+        body: `Your dates came out as ${quote(issue.examples)}, with nothing between start and end. The PDF's font doesn't map its dash to text, so the reader drops it, along with hyphens inside words. This checker still reads these as ranges, but a weaker ATS parser may not. Writing "to" between the dates ("Sep 2024 to Mar 2026") always survives.`,
+      };
     case "unreadable":
       return {
-        title: `${issue.count} character${plural} couldn't be read`,
-        body: "These are usually icon fonts, such as phone, email or location icons. ATS parsers drop or garble them, so write contact labels as plain text.",
+        title: `${issue.count} icon${plural} or symbol${plural} can't be read as text`,
+        body: "Icons such as phone, email, GitHub or LinkedIn turn into junk characters for an ATS, and what they meant is lost: a bare handle like \"ezyasin\" no longer says it's a GitHub profile. Phone numbers and emails are still found by their format. Keep the icons if you like them, but write links in full, e.g. github.com/ezyasin and linkedin.com/in/yourname.",
       };
   }
 }

@@ -23,6 +23,33 @@ const RANGE = new RegExp(
   "gi"
 );
 
+// Some PDFs lose the dash between dates because their font doesn't map it to
+// text: "Sep. 2023 - Mar. 2024" extracts as "Sep. 2023 Mar. 2024". Two
+// month-and-year dates side by side on one line are still a range; bare years
+// ("2019 2020") are too ambiguous to count.
+const NAMED_DATE = `(?:${MONTH_NAMES})\\.?,?\\s+\\d{4}`;
+const ADJACENT = new RegExp(
+  `(?<![\\d/.])(${NAMED_DATE})[ \\t]+(${NAMED_DATE}|${OPEN_END})(?![\\d/])`,
+  "gi"
+);
+
+/** Separated ranges plus side-by-side month dates that don't overlap them. */
+function rangeMatches(text: string): { all: RegExpMatchArray[]; adjacent: RegExpMatchArray[] } {
+  const separated = [...text.matchAll(RANGE)];
+  const spans = separated.map((match) => [match.index ?? 0, (match.index ?? 0) + match[0].length]);
+  const adjacent = [...text.matchAll(ADJACENT)].filter((match) => {
+    const start = match.index ?? 0;
+    const end = start + match[0].length;
+    return !spans.some(([from, to]) => start < to && end > from);
+  });
+  return { all: [...separated, ...adjacent], adjacent };
+}
+
+/** Date ranges that lost their dash in extraction, e.g. "Sep. 2023 Mar. 2024". */
+export function datesWithoutSeparator(text: string): string[] {
+  return rangeMatches(text).adjacent.map((match) => match[0]);
+}
+
 export interface DateRange {
   /** Months since year 0, so ranges can be compared and merged. */
   start: number;
@@ -60,7 +87,7 @@ export function findDateRanges(text: string, now: Date = new Date()): DateRange[
   const earliest = 1960 * 12;
   const ranges: DateRange[] = [];
 
-  for (const match of text.matchAll(RANGE)) {
+  for (const match of rangeMatches(text).all) {
     const start = parseDate(match[1]);
     if (!start) continue;
 

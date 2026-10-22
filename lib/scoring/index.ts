@@ -1,5 +1,6 @@
 import { DEGREE_LABEL, detectDegree, educationScore } from "./education";
 import { findDateRanges, totalYears } from "./experience";
+import { countIconGlyphs } from "./extraction";
 import { keywordCoverage, matchKeywords } from "./keywords";
 import { normalizeText, sectionText, splitSections } from "./sections";
 import type {
@@ -195,7 +196,7 @@ const STRUCTURE_POINTS = {
 function scoreStructure(cvText: string, sections: CvSection[], rangesFound: number): ScoreComponent {
   const present = new Set(sections.map((section) => section.key));
   const words = cvText.split(/\s+/).filter(Boolean).length;
-  const unreadable = (cvText.match(/[�-]/g) ?? []).length;
+  const unreadable = countIconGlyphs(cvText);
 
   const checks: Array<ScoreCheck & { id: keyof typeof STRUCTURE_POINTS }> = [
     {
