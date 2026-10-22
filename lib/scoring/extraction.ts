@@ -3,7 +3,9 @@
  * extracted text, so a recruiter searching it sees these problems too.
  * Pure, so the browser can run it on the stored CV text.
  */
-export type ExtractionIssueKind = "mixed_case" | "dotted_i" | "spaced_letters" | "unreadable";
+import { datesWithoutSeparator } from "./experience";
+
+export type ExtractionIssueKind = "mixed_case" | "dotted_i" | "spaced_letters" | "missing_dash" | "unreadable";
 
 export interface ExtractionIssue {
   kind: ExtractionIssueKind;
@@ -22,7 +24,13 @@ const LOWER = new RegExp("\\p{Ll}", "u");
 const PLURAL_ACRONYM = new RegExp("\\p{Lu}s$", "u");
 // "E X P E R I E N C E": at least four single letters separated by spaces.
 const SPACED = new RegExp("(?:^|\\s)((?:\\p{L} ){3,}\\p{L})(?=\\s|$)", "gmu");
-const UNREADABLE = /[�-]/g;
+// Icon fonts land in the Private Use Area; icon packages that map to Unicode
+// come out as symbols (☎ ✉) or emoji (📱). An ATS reads none of them as words.
+const ICON_GLYPH = /[\uFFFD\uE000-\uF8FF\u2600-\u27BF]|[\u{1F000}-\u{1FAFF}]/gu;
+
+export function countIconGlyphs(text: string): number {
+  return (text.match(ICON_GLYPH) ?? []).length;
+}
 
 // Terms written in mixed case on purpose, which would otherwise look garbled.
 const MIXED_CASE_TERMS = new Set(["nosql", "mysql", "mssql", "ebpf", "grpc", "mtls", "curl"]);
@@ -88,9 +96,14 @@ export function findExtractionIssues(text: string): ExtractionIssue[] {
     issues.push({ kind: "spaced_letters", count: spaced.length, examples: distinct(spaced) });
   }
 
-  const unreadable = text.match(UNREADABLE) ?? [];
-  if (unreadable.length > 0) {
-    issues.push({ kind: "unreadable", count: unreadable.length, examples: [] });
+  const dashless = datesWithoutSeparator(text);
+  if (dashless.length > 0) {
+    issues.push({ kind: "missing_dash", count: dashless.length, examples: distinct(dashless, 3) });
+  }
+
+  const icons = countIconGlyphs(text);
+  if (icons > 0) {
+    issues.push({ kind: "unreadable", count: icons, examples: [] });
   }
 
   return issues;
