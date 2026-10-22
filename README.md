@@ -37,7 +37,10 @@ See [ROADMAP.md](./ROADMAP.md) for what's next.
 - Run analysis with Claude, Gemini, or OpenAI
 - Show ATS score, verdict, keyword gaps, and section scores
 - Generate rewrite suggestions and an improved CV
-- Show a CV diff, ATS education, ATS metrics, and export tools
+- Show the raw text an ATS reads from the file, with extraction problems highlighted
+- Let you correct the extracted job requirements and re-score instantly
+- Show a CV diff and export tools
+- Write a cover letter from the CV and job post
 - Export the optimized CV as DOCX, LaTeX (.tex), or plain text
 
 ## Main Features
@@ -47,8 +50,10 @@ See [ROADMAP.md](./ROADMAP.md) for what's next.
 - Readiness checks before analysis starts
 - Live analysis progress with staged upload and processing feedback
 - Matched and missing keyword breakdown
-- Role-specific rewrite suggestions
-- ATS parsing and formatting insights
+- Role-specific rewrite suggestions, ranked by the scoring engine, with every added keyword backed by a quote from the CV
+- "What the ATS sees" view of the extracted text, with warnings for garbled words, letter-spaced headings and icon fonts
+- Editable job requirements with instant in-browser re-scoring
+- Cover letter generation that only uses facts from the CV
 - Improved CV preview and line-by-line diff
 - DOCX export and plain-text export
 - In-session improvement history
