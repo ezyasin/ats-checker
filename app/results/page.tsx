@@ -1,7 +1,8 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ArrowRight, FileText, Mail } from "lucide-react";
 import { useAnalysisStore } from "@/store/analysis";
 import type { AnalysisResult } from "@/types/analysis";
 import { scoreCv } from "@/lib/scoring";
@@ -126,6 +127,12 @@ function ResultsContent({ result }: { result: AnalysisResult }) {
     }
   }
 
+  const tabsRef = useRef<HTMLDivElement>(null);
+  function openTab(tab: string) {
+    setActiveTab(tab);
+    tabsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
   function handleStartOver() {
     reset();
     router.push("/analyze");
@@ -142,9 +149,13 @@ function ResultsContent({ result }: { result: AnalysisResult }) {
               Here&apos;s how your CV scores against the reference job post
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button variant="outline" onClick={handleStartOver}>
               Start Over
+            </Button>
+            <Button variant="outline" onClick={() => openTab("cover-letter")}>
+              <Mail className="h-4 w-4" aria-hidden="true" />
+              Cover letter
             </Button>
             <Button onClick={() => handleExport("docx")}>
               Download Improved CV
@@ -193,6 +204,46 @@ function ResultsContent({ result }: { result: AnalysisResult }) {
           </div>
         </div>
 
+        {/* Next steps: the two things people come here to take away */}
+        <div className="mt-8 grid gap-4 md:grid-cols-2">
+          <button
+            type="button"
+            onClick={() => openTab("improved-cv")}
+            className="group flex cursor-pointer items-start gap-4 rounded-xl border bg-card p-5 text-left transition-colors hover:border-blue-300 hover:bg-blue-50/50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 dark:hover:bg-blue-950/30"
+          >
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300">
+              <FileText className="h-5 w-5" aria-hidden="true" />
+            </span>
+            <span className="flex-1">
+              <span className="block font-semibold">Your improved CV is ready</span>
+              <span className="mt-1 block text-sm text-muted-foreground">
+                Scores {improvedScore} against this job. Preview it, then download it as DOCX, LaTeX or plain text.
+              </span>
+            </span>
+            <ArrowRight className="mt-1 h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            onClick={() => openTab("cover-letter")}
+            className="group flex cursor-pointer items-start gap-4 rounded-xl border bg-card p-5 text-left transition-colors hover:border-blue-300 hover:bg-blue-50/50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 dark:hover:bg-blue-950/30"
+          >
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300">
+              <Mail className="h-5 w-5" aria-hidden="true" />
+            </span>
+            <span className="flex-1">
+              <span className="block font-semibold">
+                {coverLetter ? "Your cover letter" : "Write a cover letter for this job"}
+              </span>
+              <span className="mt-1 block text-sm text-muted-foreground">
+                {coverLetter
+                  ? "Open it to edit, copy or download."
+                  : "Generated from your CV and this job post in a few seconds, using only facts your CV states."}
+              </span>
+            </span>
+            <ArrowRight className="mt-1 h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
+          </button>
+        </div>
+
         <div className="mt-8">
           <RequirementsEditor
             requirements={requirements}
@@ -217,15 +268,19 @@ function ResultsContent({ result }: { result: AnalysisResult }) {
         <Separator className="my-8" />
 
         {/* Suggestions & Improved CV */}
+        <div ref={tabsRef} className="scroll-mt-6" />
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="grid h-auto w-full grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
             <TabsTrigger value="suggestions">
               Suggestions ({suggestions.length})
             </TabsTrigger>
-            <TabsTrigger value="ats-view">What the ATS sees</TabsTrigger>
-            <TabsTrigger value="diff">Changes</TabsTrigger>
             <TabsTrigger value="improved-cv">Improved CV</TabsTrigger>
-            <TabsTrigger value="cover-letter">Cover letter</TabsTrigger>
+            <TabsTrigger value="cover-letter">
+              <Mail className="h-3.5 w-3.5" aria-hidden="true" />
+              Cover letter
+            </TabsTrigger>
+            <TabsTrigger value="diff">Changes</TabsTrigger>
+            <TabsTrigger value="ats-view">What the ATS sees</TabsTrigger>
           </TabsList>
 
           <TabsContent value="suggestions" className="mt-6">
@@ -273,7 +328,7 @@ function ResultsContent({ result }: { result: AnalysisResult }) {
             <Card>
               <CardHeader>
                 <CardTitle className="text-sm">
-                  Changes Made to Your CV
+                  Changes made to your CV
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -301,30 +356,26 @@ function ResultsContent({ result }: { result: AnalysisResult }) {
             <AtsView cvText={result.originalCv} />
           </TabsContent>
 
-          <TabsContent value="improved-cv" className="mt-6 space-y-6">
-            <ATSOptimizedExport improvedCv={result.improvedCv} onExport={handleExport} />
+          <TabsContent value="improved-cv" className="mt-6">
             <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center justify-between text-sm">
-                  <span>Improved CV Preview</span>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => handleExport("docx")}
-                  >
-                    Download DOCX
-                  </Button>
-                </CardTitle>
+              <CardHeader className="space-y-1">
+                <CardTitle className="text-base font-semibold">Improved CV</CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  Your CV with the suggestions applied, laid out the way the downloads will look.
+                </p>
               </CardHeader>
-              <CardContent>
-                {result.improvedCv && typeof result.improvedCv === 'string' && result.improvedCv.trim().length > 0 ? (
-                  <ScrollArea className="h-[600px] rounded-lg border bg-white">
-                    <CvDocument markdown={result.improvedCv} className="mx-auto max-w-3xl px-6 py-8 sm:px-10" />
-                  </ScrollArea>
+              <CardContent className="space-y-5">
+                {improvedCv.trim().length > 0 ? (
+                  <>
+                    <ATSOptimizedExport improvedCv={improvedCv} onExport={handleExport} />
+                    <div className="rounded-xl bg-slate-100 p-3 sm:p-6 dark:bg-slate-900">
+                      <ScrollArea className="h-[720px] rounded-md bg-white shadow-sm ring-1 ring-slate-200">
+                        <CvDocument markdown={improvedCv} className="mx-auto max-w-[760px] px-6 py-10 sm:px-12" />
+                      </ScrollArea>
+                    </div>
+                  </>
                 ) : (
-                  <div className="text-center text-gray-500 py-8">
-                    <p>No improved CV available</p>
-                  </div>
+                  <p className="py-8 text-center text-muted-foreground">No improved CV available</p>
                 )}
               </CardContent>
             </Card>

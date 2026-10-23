@@ -40,7 +40,7 @@ See [ROADMAP.md](./ROADMAP.md) for what's next.
 - Show the raw text an ATS reads from the file, with extraction problems highlighted
 - Let you correct the extracted job requirements and re-score instantly
 - Show a CV diff and export tools
-- Write a cover letter from the CV and job post
+- Write a cover letter from the CV and job post, and download it as DOCX or text
 - Export the optimized CV as DOCX, LaTeX (.tex), or plain text
 
 ## Main Features

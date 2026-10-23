@@ -32,6 +32,10 @@ export function countIconGlyphs(text: string): number {
   return (text.match(ICON_GLYPH) ?? []).length;
 }
 
+export function stripIconGlyphs(text: string): string {
+  return text.replace(ICON_GLYPH, "");
+}
+
 // Terms written in mixed case on purpose, which would otherwise look garbled.
 const MIXED_CASE_TERMS = new Set(["nosql", "mysql", "mssql", "ebpf", "grpc", "mtls", "curl"]);
 

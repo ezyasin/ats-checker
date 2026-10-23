@@ -1,4 +1,5 @@
-import { parseCvMarkdown, type InlineSpan } from "@/lib/cvMarkdown";
+import { parseInline } from "@/lib/cvMarkdown";
+import { parseCv, splitLabel, type CvEntry } from "@/lib/cvModel";
 
 function escapeLatex(text: string): string {
   return text
@@ -11,81 +12,82 @@ function escapeLatex(text: string): string {
     .replace(/\{/g, "\\{")
     .replace(/\}/g, "\\}")
     .replace(/\^/g, "\\^{}")
-    .replace(/~/g, "\\~{}");
+    .replace(/~/g, "\\~{}")
+    .replace(/\|/g, "\\textbar{}");
 }
 
-function formatSpans(spans: InlineSpan[]): string {
-  return spans
+function inline(text: string): string {
+  return parseInline(text)
     .map((span) => (span.bold ? `\\textbf{${escapeLatex(span.text)}}` : escapeLatex(span.text)))
     .join("");
 }
 
+function itemize(lines: string[]): string[] {
+  if (lines.length === 0) return [];
+  return ["\\begin{itemize}", ...lines.map((line) => `  \\item ${inline(line)}`), "\\end{itemize}"];
+}
+
+function entry(item: CvEntry): string[] {
+  const place = [item.organization, item.location].filter(Boolean).join(", ");
+  const lines = [`\\cventry{${escapeLatex(item.title)}}{${escapeLatex(item.dates)}}{${escapeLatex(place)}}`];
+  lines.push(...item.details.map((detail) => `${inline(detail)}\\par`));
+  lines.push(...itemize(item.bullets));
+  return lines;
+}
+
 /**
- * Generate a clean, single-column LaTeX resume (.tex) from the improved CV's
- * markdown-like structure (the same headings/bullets the DOCX exporter parses).
- *
- * The first `# ` heading is rendered as a centered bold name title; subsequent
- * `# `/`## ` become `\section*`; `### ` becomes `\subsection*`; bullets
- * become an `itemize`; `**bold**` becomes `\textbf`. LaTeX special
- * characters are escaped in user content.
+ * A single-column LaTeX CV (.tex) for Overleaf or a local TeX install: name
+ * and contact line centred, ruled section headings, and each entry with its
+ * title and dates on one line. Uses only packages every TeX distribution has.
  */
 export function generateLatex(improvedCv: string): string {
-  const body: string[] = [];
-  let inItemize = false;
-  let nameEmitted = false;
+  const cv = parseCv(improvedCv);
+  const body: string[] = ["\\begin{center}"];
+  if (cv.name) body.push(`  {\\LARGE\\bfseries ${escapeLatex(cv.name)}}\\\\[2pt]`);
+  if (cv.headline) body.push(`  {\\large ${escapeLatex(cv.headline)}}\\\\[2pt]`);
+  if (cv.contact.length > 0) body.push(`  {\\small ${cv.contact.map(escapeLatex).join(" \\enspace\\textbar\\enspace ")}}`);
+  body.push("\\end{center}", "");
 
-  const closeItemize = () => {
-    if (inItemize) {
-      body.push("\\end{itemize}");
-      inItemize = false;
+  for (const section of cv.sections) {
+    body.push(`\\section*{${escapeLatex(section.heading)}}`);
+    const items = section.blocks.flatMap((block) => (block.type === "item" ? [block.text] : []));
+    const labelled = items.every((item) => splitLabel(item));
+    for (const block of section.blocks) {
+      if (block.type === "paragraph") body.push(`${inline(block.text)}\\par`);
+      if (block.type === "entry") body.push(...entry(block.entry));
     }
-  };
-
-  for (const block of parseCvMarkdown(improvedCv)) {
-    if (block.type === "blank") {
-      closeItemize();
-      continue;
+    if (items.length > 0 && labelled) {
+      body.push(
+        ...items.map((item) => {
+          const [label, value] = splitLabel(item)!;
+          return `\\textbf{${escapeLatex(label)}:} ${inline(value)}\\par`;
+        })
+      );
+    } else {
+      body.push(...itemize(items));
     }
-
-    const content = formatSpans(block.spans);
-
-    if (block.type === "heading") {
-      closeItemize();
-      if (block.level === 1 && !nameEmitted) {
-        body.push(`\\begin{center}{\\Large \\textbf{${content}}}\\end{center}`);
-        nameEmitted = true;
-      } else if (block.level === 3) {
-        body.push(`\\subsection*{${content}}`);
-      } else {
-        body.push(`\\section*{${content}}`);
-      }
-      continue;
-    }
-
-    if (block.type === "bullet") {
-      if (!inItemize) {
-        body.push("\\begin{itemize}");
-        inItemize = true;
-      }
-      body.push(`  \\item ${content}`);
-      continue;
-    }
-
-    closeItemize();
-    body.push(content);
     body.push("");
   }
 
-  closeItemize();
-
   const preamble = [
+    "% Compiles with pdfLaTeX (Overleaf's default). For non-Latin scripts, switch the",
+    "% compiler to XeLaTeX and replace inputenc and fontenc with \\usepackage{fontspec}.",
     "\\documentclass[11pt]{article}",
     "\\usepackage[utf8]{inputenc}",
     "\\usepackage[T1]{fontenc}",
-    "\\usepackage[margin=0.7in]{geometry}",
+    "\\usepackage{lmodern}",
+    "\\usepackage[a4paper,margin=0.7in]{geometry}",
+    "\\usepackage{enumitem}",
+    "\\usepackage{titlesec}",
     "\\usepackage[hidelinks]{hyperref}",
     "\\pagestyle{empty}",
     "\\setlength{\\parindent}{0pt}",
+    "\\setlength{\\parskip}{2pt}",
+    "\\setlist[itemize]{leftmargin=1.3em,itemsep=1pt,topsep=2pt,parsep=0pt}",
+    "\\titleformat{\\section}{\\large\\bfseries}{}{0em}{\\MakeUppercase}[\\titlerule]",
+    "\\titlespacing*{\\section}{0pt}{10pt}{5pt}",
+    "% \\cventry{title}{dates}{organization, location}",
+    "\\newcommand{\\cventry}[3]{\\par\\smallskip\\textbf{#1}\\hfill #2\\par\\if\\relax\\detokenize{#3}\\relax\\else{\\itshape #3}\\par\\fi}",
     "",
     "\\begin{document}",
     "",

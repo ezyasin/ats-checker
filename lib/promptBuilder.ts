@@ -30,6 +30,46 @@ export const REQUIREMENTS_SCHEMA = {
   },
 } as const;
 
+const CV_ENTRY_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["title", "organization", "location", "startDate", "endDate", "bullets"],
+  properties: {
+    title: { type: "string" },
+    organization: { type: "string" },
+    location: { type: "string" },
+    startDate: { type: "string" },
+    endDate: { type: "string" },
+    bullets: { type: "array", items: { type: "string" } },
+  },
+} as const;
+
+/** The improved CV as fields; lib/cvModel.ts does the layout. */
+const CV_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["name", "headline", "contact", "sections"],
+  properties: {
+    name: { type: "string" },
+    headline: { type: "string" },
+    contact: { type: "array", items: { type: "string" } },
+    sections: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["heading", "paragraph", "items", "entries"],
+        properties: {
+          heading: { type: "string" },
+          paragraph: { type: "string" },
+          items: { type: "array", items: { type: "string" } },
+          entries: { type: "array", items: CV_ENTRY_SCHEMA },
+        },
+      },
+    },
+  },
+} as const;
+
 export const REWRITE_SCHEMA = {
   type: "object",
   additionalProperties: false,
@@ -49,7 +89,7 @@ export const REWRITE_SCHEMA = {
         },
       },
     },
-    improvedCv: { type: "string" },
+    improvedCv: CV_SCHEMA,
     addedKeywords: {
       type: "array",
       items: {
@@ -103,12 +143,19 @@ export function buildRewritePrompt(cvText: string, jobDescription: string, score
   const summaries = score.components.map(
     (component) => `- ${component.label}: ${component.score}/100. ${component.summary}`
   );
-  const garbled = findExtractionIssues(cvText).find((issue) => issue.kind === "mixed_case");
-  const extractionNote = garbled
-    ? `\n6. The CV text was extracted from a file, and odd capitalisation such as ${garbled.examples
+  const issues = findExtractionIssues(cvText);
+  const garbled = issues.find((issue) => issue.kind === "mixed_case");
+  const dashless = issues.find((issue) => issue.kind === "missing_dash");
+  const notes = [
+    garbled &&
+      `Odd capitalisation such as ${garbled.examples
         .map((word) => `"${word}"`)
-        .join(", ")} comes from that extraction, not from the candidate. Write those words normally in improvedCv, but don't make suggestions about them or call them typos.`
-    : "";
+        .join(", ")} comes from that extraction, not from the candidate. Write those words normally in improvedCv, but don't make suggestions about them or call them typos.`,
+    dashless &&
+      `The file's font lost the dash between dates, so "${dashless.examples[0]}" is a start and an end date. Hyphens inside words may be missing too ("end to end" for "end-to-end"); restore them where they are obviously meant.`,
+  ].filter(Boolean);
+  const extractionNote =
+    notes.length > 0 ? `\n6. The CV text was extracted from a file. ${notes.join(" ")}` : "";
 
   return `Improve this CV for the job post below.
 
@@ -133,12 +180,16 @@ Instructions:
 1. Add a missing keyword only where the CV already gives evidence for it, e.g. the CV says "Postgres" and the job says "PostgreSQL", or a described task clearly is that skill. Do not upgrade claims: "fixed accessibility issues" does not become "ensured WCAG compliance". List every missing keyword you could not add honestly in unaddressedKeywords. Never add placeholders, bracketed notes or "simulated" skills: if there is no evidence, leave the skill out.
    For every missing keyword you do add, put it in addedKeywords with "evidence": a short quote copied word for word from the CV that shows the candidate has it. A program checks each quote against the CV and removes any keyword whose quote isn't found.
 2. Never change the candidate's job titles or seniority, including in the summary: a "Frontend Developer" stays a "Frontend Developer" even when applying for a "Senior Frontend Engineer" role. Describe the candidate's real experience in the summary instead.
-3. suggestions: 3 to 8 targeted rewrites, most impactful first. "original" must be copied verbatim from the CV; "improved" is the replacement; "reason" explains the ATS benefit in one sentence. Prefer changes that honestly add a missing keyword or fix a failed structure check. Don't suggest reformatting dates unless "Parseable dates" failed: the engine already reads formats like "Sep. 2024".
-4. improvedCv: the complete CV in markdown, applying all of your suggestions.
-   - First line "# <Full Name>", then one line with the contact details from the CV (email, phone, location, links).
-   - Standard "## " headings: Summary, Experience, Skills, Education, then Certifications, Projects or others the CV already has.
-   - Keep every role, employer, date and degree from the original. Write role dates as "Mon YYYY – Mon YYYY" or "Mon YYYY – Present".
-   - Bullet points start with "- ".
+3. suggestions: 3 to 8 targeted rewrites, most impactful first, each about one bullet or sentence, never a whole role. "original" must be copied verbatim from the CV; "improved" is the replacement, as plain text; "reason" explains the ATS benefit in one sentence. Prefer changes that honestly add a missing keyword or fix a failed structure check. Don't suggest reformatting dates unless "Parseable dates" failed: the engine already reads formats like "Sep. 2024".
+4. improvedCv: the complete CV, applying all of your suggestions, as fields. The app does the layout, so every field is plain text: no markdown, no bullet characters, no line breaks.
+   - name: the candidate's full name. headline: the title line under the name if the CV has one, otherwise "".
+   - contact: one item each for email, phone, location and each link, as in the CV. Write links as text (github.com/name). Leave out icon names and symbols such as "ENVELOPE", "GITHUB-SQUARE" or "☎": they come from icon fonts.
+   - sections, in the CV's order, with standard headings: Summary, Experience, Skills, Education, then Certifications, Projects or others the CV already has.
+     - paragraph: prose such as the summary, otherwise "".
+     - entries: one per role, degree, project or certificate. title is the job title or degree, organization the employer or school, location the city if given. startDate and endDate as "Sep 2024", "2024" or "Present", or "" if the CV has none. bullets: one achievement each.
+     - items: lines that aren't entries, such as skill groups ("Languages: Go, Python") or spoken languages.
+   - Keep every role, employer, date and degree from the original. Don't write bullets for a role the CV gives none: an empty bullets list is fine.
+   - Use normal capitalisation even where the CV's font shows capitals: "Backend Developer", not "BACKEND DEVELOPER". Keep acronyms (AWS, SQL) and product names as written.
 5. Write in the same language as the CV.${extractionNote}`;
 }
 

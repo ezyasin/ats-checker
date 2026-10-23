@@ -19,6 +19,7 @@ import type {
   ScoreResult,
 } from "../scoring";
 import { normalizeText } from "../scoring/sections";
+import { canonicalCv, cvFromFields, cvToMarkdown, normalizeCv } from "../cvModel";
 import type { RewriteSuggestion } from "@/types/analysis";
 import { LLMClient, LLMError, LLMProvider } from "./types";
 
@@ -155,6 +156,10 @@ export interface RewriteResult {
   unaddressedKeywords: string[];
 }
 
+// A suggestion should change a bullet or a sentence. Gemini Flash-Lite returned
+// whole roles (employer, title, dates and every bullet) as one "suggestion".
+const MAX_SUGGESTION_LINES = 2;
+
 // A model hedging an invented claim: "Message Queues (simulated)", "[add metric]".
 const PLACEHOLDER = /\b(placeholders?|simulated|hypothetical|tbd|todo|if applicable)\b|\[[^\]]*\]/i;
 
@@ -171,8 +176,16 @@ function readsAs(text: string): string {
     .trim();
 }
 
-export function sanitizeRewrite(data: unknown, provider: LLMProvider): RewriteResult {
-  if (!isRecord(data) || typeof data.improvedCv !== "string" || data.improvedCv.trim().length === 0) {
+/** The improved CV as canonical markdown: structured fields, or markdown from older prompts. */
+function improvedCvMarkdown(value: unknown, originalCv: string): string {
+  if (typeof value === "string") return value.trim() ? canonicalCv(value, originalCv) : "";
+  const model = cvFromFields(value);
+  return model ? cvToMarkdown(normalizeCv(model, originalCv)) : "";
+}
+
+export function sanitizeRewrite(data: unknown, provider: LLMProvider, originalCv = ""): RewriteResult {
+  const markdown = isRecord(data) ? improvedCvMarkdown(data.improvedCv, originalCv) : "";
+  if (!isRecord(data) || markdown.length === 0) {
     throw new LLMError("invalid_output", provider, "The model did not return an improved CV.");
   }
 
@@ -189,7 +202,7 @@ export function sanitizeRewrite(data: unknown, provider: LLMProvider): RewriteRe
     }));
 
   // Undo placeholder claims in the CV too, so they can't add keywords or score.
-  let improvedCv = data.improvedCv.trim();
+  let improvedCv = markdown;
   for (const suggestion of suggestions) {
     if (PLACEHOLDER.test(suggestion.improved) && !PLACEHOLDER.test(suggestion.original)) {
       improvedCv = improvedCv.split(suggestion.improved).join(suggestion.original);
@@ -204,6 +217,7 @@ export function sanitizeRewrite(data: unknown, provider: LLMProvider): RewriteRe
       if (seen.has(key)) return false;
       seen.add(key);
       return (
+        suggestion.original.split("\n").filter((line) => line.trim()).length <= MAX_SUGGESTION_LINES &&
         !(PLACEHOLDER.test(suggestion.improved) && !PLACEHOLDER.test(suggestion.original)) &&
         // Same text to an ATS (e.g. "Sep. 2024" -> "Sep 2024"): not worth the user's time.
         readsAs(suggestion.improved) !== readsAs(suggestion.original)
@@ -234,7 +248,7 @@ export async function rewriteCv(
     maxTokens: 16000,
     effort: "medium",
   });
-  return sanitizeRewrite(data, provider);
+  return sanitizeRewrite(data, provider, cvText);
 }
 
 // A letter shorter than this isn't a cover letter; a bracket is an unfilled placeholder.
