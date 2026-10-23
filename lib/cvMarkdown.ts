@@ -1,8 +1,11 @@
 /**
- * The rewrite returns the improved CV as light markdown: `#` headings, `-`
- * bullets and `**bold**`. Everything that shows or exports the CV parses it
- * here, so no view or file leaks raw markers.
+ * Light markdown: `#` headings, `-` bullets and `**bold**`. Whole CVs are
+ * laid out by lib/cvModel.ts; the block parser here is for snippets such as
+ * suggestions, and `parseInline` handles bold everywhere, so no view or file
+ * leaks raw markers.
  */
+import { cvModelToPlainText, parseCv } from "./cvModel";
+
 export interface InlineSpan {
   text: string;
   bold: boolean;
@@ -57,13 +60,5 @@ export function spansToText(spans: InlineSpan[]): string {
 
 /** For pasting into application forms and the .txt download. */
 export function cvToPlainText(markdown: string): string {
-  return parseCvMarkdown(markdown)
-    .map((block) => {
-      if (block.type === "blank") return "";
-      const text = spansToText(block.spans);
-      return block.type === "bullet" ? `• ${text}` : text;
-    })
-    .join("\n")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
+  return cvModelToPlainText(parseCv(markdown));
 }

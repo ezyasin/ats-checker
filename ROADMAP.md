@@ -51,6 +51,9 @@ The LLM reads the job post and extracts structured requirements. Plain TypeScrip
 - [x] "What the ATS sees": the raw extracted text split into recognised sections, with warnings and highlights for garbled words (`iNTERN`, Turkish dotted İ), letter-spaced headings and icon-font glyphs
 - [x] Editable requirements: fix the job title, years, degree or keywords, and both CVs re-score and suggestions re-rank instantly in the browser (no LLM call)
 - [x] Trim the tab clutter: "ATS Tips" replaced by the ATS view (with a short, accurate tips list); Export merged into the Improved CV tab
+- [x] Improved CV as a real document: the rewrite returns fields (title, employer, dates, bullets) and code does the layout, so capitals ("BACKEND DEVELOPER" → "Backend Developer"), dates ("Sep. 2024" → "Sep 2024 – Mar 2026") and icon-font junk are fixed the same way every time. The preview, DOCX (dates right-aligned on the title line), LaTeX and plain text all come from it
+- [x] "Changes" is a word-level diff that ignores capitalisation, punctuation and date style, instead of comparing line N with line N
+- [x] Cover letter easier to find: a card next to the improved CV, a header button and its own tab; downloads as DOCX or text
 - [ ] Replace hard-coded `gray-*` / `text-red-600` colours with theme tokens so dark mode works everywhere
 - [ ] Mobile pass on the results page (tabs currently overflow on small screens)
 
@@ -59,7 +62,12 @@ The LLM reads the job post and extracts structured requirements. Plain TypeScrip
 - [x] Suggestion priority comes from the scoring engine (critical = adds a required keyword, important = preferred keyword or structure fix, optional = wording), not from the model
 - [x] Every keyword the rewrite adds must quote CV text as evidence; quotes are checked against the CV, and unproven additions are reverted or left unscored and flagged. A live run had added Kafka, Kubernetes, RabbitMQ and GCP with no evidence
 - [x] Placeholder claims ("simulated", "[add metric]"), cosmetic-only changes (`Sep. 2024` → `Sep 2024`) and repeated suggestions are dropped
-- [ ] Mark suggestions whose "original" text doesn't exist in the CV (the LLM paraphrased) and hide or fix them
+- [x] Evidence must support the skill: the quote has to name it, or be the text the skill was added to, and one quote can back at most two skills. A live Gemini run had "proven" gRPC, GCP and Protocol Buffers with one unrelated summary sentence (score 72 → 92; honest result 72 → 75)
+- [x] Suggestions that rewrite a whole role are dropped; they should change one bullet or sentence
+- [x] Drop suggestions whose "original" text doesn't exist in the CV (fewer than 80% of its words are in it)
+- [x] Remove bullets the rewrite invented for a role that had none (Gemini Flash-Lite wrote "Contributed to site reliability engineering efforts")
+- [x] Put back what the rewrite dropped: whole sections (Honors & Awards, Community) with their original lines, and contact details such as the location
+- [ ] Catch an invented bullet added among real ones (only roles with no bullets at all are checked now)
 - [ ] "Do you have this skill?" checklist for missing required keywords, fed back into the rewrite
 - [ ] Keep the user's own wording where possible; show the rewrite as accept/reject per suggestion
 

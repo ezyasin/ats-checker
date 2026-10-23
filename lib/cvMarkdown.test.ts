@@ -46,7 +46,7 @@ describe("cvToPlainText", () => {
   it("removes every markdown marker", () => {
     const text = cvToPlainText(CV);
     expect(text).not.toMatch(/[#*]|---/);
-    expect(text).toContain("Frontend Developer, Acme Corp");
+    expect(text).toContain("Frontend Developer\nAcme Corp | Jan 2021 – Present");
     expect(text).toContain("• Rebuilt the dashboard in React and Redux");
     expect(text.startsWith("Jane Doe\n")).toBe(true);
   });
@@ -55,7 +55,7 @@ describe("cvToPlainText", () => {
 describe("exporters", () => {
   it("writes bold as \\textbf in LaTeX and leaves no markers", () => {
     const tex = generateLatex(CV);
-    expect(tex).toContain("\\textbf{Frontend Developer}, Acme Corp");
+    expect(tex).toContain("\\cventry{Frontend Developer}{Jan 2021 – Present}{Acme Corp}");
     expect(tex).toContain("\\textbf{React}");
     expect(tex).toContain("\\section*{Experience}");
     expect(tex).not.toContain("**");
