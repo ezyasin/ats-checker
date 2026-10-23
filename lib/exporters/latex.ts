@@ -29,6 +29,11 @@ function itemize(lines: string[]): string[] {
 
 function entry(item: CvEntry): string[] {
   const place = [item.organization, item.location].filter(Boolean).join(", ");
+  // A certificate or award ("Title, Issuer   2023") fits on one line.
+  if (item.bullets.length === 0 && item.details.length === 0 && !item.location) {
+    const issuer = item.organization ? `, \\textit{${escapeLatex(item.organization)}}` : "";
+    return [`\\par\\textbf{${escapeLatex(item.title)}}${issuer}\\hfill ${escapeLatex(item.dates)}\\par`];
+  }
   const lines = [`\\cventry{${escapeLatex(item.title)}}{${escapeLatex(item.dates)}}{${escapeLatex(place)}}`];
   lines.push(...item.details.map((detail) => `${inline(detail)}\\par`));
   lines.push(...itemize(item.bullets));
@@ -50,22 +55,33 @@ export function generateLatex(improvedCv: string): string {
 
   for (const section of cv.sections) {
     body.push(`\\section*{${escapeLatex(section.heading)}}`);
-    const items = section.blocks.flatMap((block) => (block.type === "item" ? [block.text] : []));
-    const labelled = items.every((item) => splitLabel(item));
+    // Blocks in order; a run of items is one list, or "Label:" lines if every item has a label.
+    let items: string[] = [];
+    const flush = () => {
+      if (items.every((item) => splitLabel(item))) {
+        body.push(
+          ...items.map((item) => {
+            const [label, value] = splitLabel(item)!;
+            return `\\textbf{${escapeLatex(label)}:} ${inline(value)}\\par`;
+          })
+        );
+      } else if (items.length === 1) {
+        body.push(`${inline(items[0])}\\par`);
+      } else {
+        body.push(...itemize(items));
+      }
+      items = [];
+    };
     for (const block of section.blocks) {
+      if (block.type === "item") {
+        items.push(block.text);
+        continue;
+      }
+      flush();
       if (block.type === "paragraph") body.push(`${inline(block.text)}\\par`);
-      if (block.type === "entry") body.push(...entry(block.entry));
+      else body.push(...entry(block.entry));
     }
-    if (items.length > 0 && labelled) {
-      body.push(
-        ...items.map((item) => {
-          const [label, value] = splitLabel(item)!;
-          return `\\textbf{${escapeLatex(label)}:} ${inline(value)}\\par`;
-        })
-      );
-    } else {
-      body.push(...itemize(items));
-    }
+    flush();
     body.push("");
   }
 

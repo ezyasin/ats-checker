@@ -31,6 +31,8 @@ function sectionHeading(text: string) {
 
 function entryParagraphs(entry: CvEntry) {
   const place = [entry.organization, entry.location].filter(Boolean).join(", ");
+  // A certificate or award ("Title, Issuer   2023") fits on one line.
+  const oneLine = entry.bullets.length === 0 && entry.details.length === 0 && !entry.location;
   const paragraphs = [
     // Title left, dates right on one line: one paragraph, so parsers read them together.
     new Paragraph({
@@ -39,11 +41,12 @@ function entryParagraphs(entry: CvEntry) {
       keepNext: true,
       children: [
         new TextRun({ text: entry.title, bold: true }),
+        ...(oneLine && entry.organization ? [new TextRun({ text: `, ${entry.organization}`, italics: true, color: MUTED })] : []),
         ...(entry.dates ? [new TextRun({ text: `\t${entry.dates}`, color: MUTED })] : []),
       ],
     }),
   ];
-  if (place) {
+  if (place && !oneLine) {
     paragraphs.push(
       new Paragraph({ keepNext: true, spacing: { after: 40 }, children: [new TextRun({ text: place, italics: true, color: MUTED })] })
     );

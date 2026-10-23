@@ -51,7 +51,7 @@ describe("sanitizeRewrite", () => {
           { priority: "urgent", section: "Summary", original: "x", improved: "y", reason: "c" },
           { priority: "critical", section: "Skills", original: 1 },
         ],
-        improvedCv: "# Jane\n",
+        improvedCv: "# Jane\n\n## Notes\n\n- b\n- y\n",
         unaddressedKeywords: ["GraphQL"],
       },
       "openai"
@@ -59,7 +59,7 @@ describe("sanitizeRewrite", () => {
     expect(result.suggestions).toHaveLength(2);
     // Priority is set later by the scoring engine; whatever the model sends is dropped.
     expect(result.suggestions[0]).toEqual({ section: "Skills", original: "a", improved: "b", reason: "c" });
-    expect(result.improvedCv).toBe("# Jane");
+    expect(result.improvedCv).toBe("# Jane\n\n## Notes\n\n- b\n- y");
     expect(() => sanitizeRewrite({ suggestions: [], improvedCv: " " }, "openai")).toThrow(LLMError);
   });
 });
@@ -120,7 +120,7 @@ describe("sanitizeRewrite filters", () => {
           { section: "Experience", original: "Sep. 2024 - Mar. 2026", improved: "September 2024 – March 2026", reason: "r" },
           { section: "Summary", original: "Backend developer", improved: "Backend developer building Go microservices", reason: "r" },
         ],
-        improvedCv: "# Alex",
+        improvedCv: "# Alex\n## Summary\nBackend developer building Go microservices",
         unaddressedKeywords: [],
       },
       "gemini"
@@ -148,13 +148,45 @@ describe("sanitizeRewrite filters", () => {
           { section: "Summary", original: "Backend developer", improved: "Backend developer building Go services", reason: "r" },
           { section: "Summary", original: "Backend developer.", improved: "Backend developer with Go and AWS", reason: "r" },
         ],
-        improvedCv: "# Alex",
+        improvedCv: "# Alex\n## Summary\nBackend developer building Go services",
         unaddressedKeywords: [],
       },
       "gemini"
     );
     expect(result.suggestions).toHaveLength(1);
     expect(result.suggestions[0].improved).toBe("Backend developer building Go services");
+  });
+
+  it("drops suggestions the improved CV doesn't carry, like a headline change undone", () => {
+    const result = sanitizeRewrite(
+      {
+        suggestions: [
+          { section: "Header", original: "DevOps Engineer · Software Architect", improved: "DevOps Engineer · Software Architect · Backend Engineer", reason: "r" },
+        ],
+        improvedCv: "# Byungjin Park\nDevOps Engineer · Software Architect · Backend Engineer\n\n## Summary\n\nSRE leader.",
+        unaddressedKeywords: [],
+      },
+      "gemini",
+      "Byungjin ParkDevOps Engineer · Software Architect\nSummary\nSRE leader."
+    );
+    expect(result.improvedCv).toBe("# Byungjin Park\nDevOps Engineer · Software Architect\n\n## Summary\n\nSRE leader.");
+    expect(result.suggestions).toEqual([]);
+  });
+
+  it("drops suggestions whose original isn't in the CV", () => {
+    const result = sanitizeRewrite(
+      {
+        suggestions: [
+          { section: "Summary", original: "Backend developer building APIs.", improved: "Backend developer building Go APIs.", reason: "r" },
+          { section: "Experience", original: "Contributed to site reliability efforts.", improved: "Led site reliability efforts.", reason: "r" },
+        ],
+        improvedCv: "# Alex\n## Summary\nBackend developer building Go APIs.\n## Experience\n- Led site reliability efforts.",
+        unaddressedKeywords: [],
+      },
+      "gemini",
+      "Alex\nSummary\nBackend developer building\nAPIs."
+    );
+    expect(result.suggestions.map((suggestion) => suggestion.section)).toEqual(["Summary"]);
   });
 });
 

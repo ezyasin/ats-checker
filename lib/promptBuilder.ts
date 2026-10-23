@@ -188,7 +188,7 @@ Instructions:
      - paragraph: prose such as the summary, otherwise "".
      - entries: one per role, degree, project or certificate. title is the job title or degree, organization the employer or school, location the city if given. startDate and endDate as "Sep 2024", "2024" or "Present", or "" if the CV has none. bullets: one achievement each.
      - items: lines that aren't entries, such as skill groups ("Languages: Go, Python") or spoken languages.
-   - Keep every role, employer, date and degree from the original. Don't write bullets for a role the CV gives none: an empty bullets list is fine.
+   - Keep every section of the original with all of its lines, including awards, community, publications and languages, and every role, employer, date and degree. Don't write bullets for a role the CV gives none: an empty bullets list is fine.
    - Use normal capitalisation even where the CV's font shows capitals: "Backend Developer", not "BACKEND DEVELOPER". Keep acronyms (AWS, SQL) and product names as written.
 5. Write in the same language as the CV.${extractionNote}`;
 }

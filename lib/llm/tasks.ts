@@ -19,7 +19,8 @@ import type {
   ScoreResult,
 } from "../scoring";
 import { normalizeText } from "../scoring/sections";
-import { canonicalCv, cvFromFields, cvToMarkdown, normalizeCv } from "../cvModel";
+import { cvFromFields, cvToMarkdown, normalizeCv, parseCv } from "../cvModel";
+import { preserveOriginal } from "../preserveCv";
 import type { RewriteSuggestion } from "@/types/analysis";
 import { LLMClient, LLMError, LLMProvider } from "./types";
 
@@ -176,11 +177,23 @@ function readsAs(text: string): string {
     .trim();
 }
 
-/** The improved CV as canonical markdown: structured fields, or markdown from older prompts. */
+/**
+ * True if most of a suggestion's "original" words are in the CV. Models
+ * sometimes quote a line they wrote themselves, which the user can't find.
+ */
+function quotesCv(original: string, cvWords: Set<string>): boolean {
+  const words = readsAs(original).split(" ").filter(Boolean);
+  return words.length > 0 && words.filter((word) => cvWords.has(word)).length >= words.length * 0.8;
+}
+
+/**
+ * The improved CV as canonical markdown: structured fields, or markdown from
+ * older prompts. Sections, contact details and bullets the model dropped or
+ * made up are put right against the original first.
+ */
 function improvedCvMarkdown(value: unknown, originalCv: string): string {
-  if (typeof value === "string") return value.trim() ? canonicalCv(value, originalCv) : "";
-  const model = cvFromFields(value);
-  return model ? cvToMarkdown(normalizeCv(model, originalCv)) : "";
+  const model = typeof value === "string" ? (value.trim() ? parseCv(value) : null) : cvFromFields(value);
+  return model ? cvToMarkdown(normalizeCv(preserveOriginal(model, originalCv), originalCv)) : "";
 }
 
 export function sanitizeRewrite(data: unknown, provider: LLMProvider, originalCv = ""): RewriteResult {
@@ -211,6 +224,8 @@ export function sanitizeRewrite(data: unknown, provider: LLMProvider, originalCv
 
   // Models sometimes repeat a suggestion for the same line; keep the first.
   const seen = new Set<string>();
+  const cvWords = new Set(readsAs(originalCv).split(" "));
+  const improvedText = readsAs(improvedCv);
   return {
     suggestions: suggestions.filter((suggestion) => {
       const key = readsAs(suggestion.original);
@@ -218,6 +233,9 @@ export function sanitizeRewrite(data: unknown, provider: LLMProvider, originalCv
       seen.add(key);
       return (
         suggestion.original.split("\n").filter((line) => line.trim()).length <= MAX_SUGGESTION_LINES &&
+        (!originalCv || quotesCv(suggestion.original, cvWords)) &&
+        // A change the CV doesn't carry (reverted in lib/preserveCv.ts) isn't a suggestion.
+        improvedText.includes(readsAs(suggestion.improved)) &&
         !(PLACEHOLDER.test(suggestion.improved) && !PLACEHOLDER.test(suggestion.original)) &&
         // Same text to an ATS (e.g. "Sep. 2024" -> "Sep 2024"): not worth the user's time.
         readsAs(suggestion.improved) !== readsAs(suggestion.original)

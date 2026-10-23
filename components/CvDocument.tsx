@@ -77,13 +77,20 @@ function Bullets({ items }: { items: string[] }) {
 
 function Entry({ entry }: { entry: CvEntry }) {
   const place = [entry.organization, entry.location].filter(Boolean).join(", ");
+  // A certificate or award ("Title, Issuer   2023") fits on one line.
+  const oneLine = entry.bullets.length === 0 && entry.details.length === 0 && !entry.location;
   return (
     <div className="break-inside-avoid">
       <div className="flex flex-wrap items-baseline justify-between gap-x-4">
-        <p className="font-semibold text-slate-900">{entry.title}</p>
+        <p className="font-semibold text-slate-900">
+          {entry.title}
+          {oneLine && entry.organization && (
+            <span className="font-normal italic text-slate-600">, {entry.organization}</span>
+          )}
+        </p>
         {entry.dates && <p className="text-[13px] tabular-nums text-slate-500">{entry.dates}</p>}
       </div>
-      {place && <p className="text-[13px] italic text-slate-600">{place}</p>}
+      {place && !oneLine && <p className="text-[13px] italic text-slate-600">{place}</p>}
       {entry.details.map((detail, index) => (
         <p key={index} className="mt-1">
           <Inline text={detail} />
@@ -119,19 +126,26 @@ function Items({ items }: { items: string[] }) {
   return <Bullets items={items} />;
 }
 
+/** Blocks in order, with consecutive items grouped into one list. */
 function SectionBody({ blocks }: { blocks: CvModelBlock[] }) {
-  const items = blocks.flatMap((block) => (block.type === "item" ? [block.text] : []));
+  const groups: (CvModelBlock | { type: "items"; items: string[] })[] = [];
+  for (const block of blocks) {
+    const previous = groups[groups.length - 1];
+    if (block.type !== "item") groups.push(block);
+    else if (previous?.type === "items") previous.items.push(block.text);
+    else groups.push({ type: "items", items: [block.text] });
+  }
   return (
-    <div className="space-y-3">
-      {blocks.map((block, index) =>
-        block.type === "paragraph" ? (
+    <div className="space-y-2.5">
+      {groups.map((group, index) => {
+        if (group.type === "items") return <Items key={index} items={group.items} />;
+        if (group.type === "entry") return <Entry key={index} entry={group.entry} />;
+        return (
           <p key={index}>
-            <Inline text={block.text} />
+            <Inline text={group.text} />
           </p>
-        ) : null
-      )}
-      {items.length > 0 && <Items items={items} />}
-      {blocks.map((block, index) => (block.type === "entry" ? <Entry key={index} entry={block.entry} /> : null))}
+        );
+      })}
     </div>
   );
 }

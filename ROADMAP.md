@@ -64,8 +64,10 @@ The LLM reads the job post and extracts structured requirements. Plain TypeScrip
 - [x] Placeholder claims ("simulated", "[add metric]"), cosmetic-only changes (`Sep. 2024` → `Sep 2024`) and repeated suggestions are dropped
 - [x] Evidence must support the skill: the quote has to name it, or be the text the skill was added to, and one quote can back at most two skills. A live Gemini run had "proven" gRPC, GCP and Protocol Buffers with one unrelated summary sentence (score 72 → 92; honest result 72 → 75)
 - [x] Suggestions that rewrite a whole role are dropped; they should change one bullet or sentence
-- [ ] Mark suggestions whose "original" text doesn't exist in the CV (the LLM paraphrased) and hide or fix them
-- [ ] Flag bullets the rewrite invented for a role that had none (Gemini Flash-Lite wrote "Contributed to site reliability engineering efforts")
+- [x] Drop suggestions whose "original" text doesn't exist in the CV (fewer than 80% of its words are in it)
+- [x] Remove bullets the rewrite invented for a role that had none (Gemini Flash-Lite wrote "Contributed to site reliability engineering efforts")
+- [x] Put back what the rewrite dropped: whole sections (Honors & Awards, Community) with their original lines, and contact details such as the location
+- [ ] Catch an invented bullet added among real ones (only roles with no bullets at all are checked now)
 - [ ] "Do you have this skill?" checklist for missing required keywords, fed back into the rewrite
 - [ ] Keep the user's own wording where possible; show the rewrite as accept/reject per suggestion
 

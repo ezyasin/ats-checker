@@ -205,6 +205,12 @@ function splitContact(line: string): string[] {
   return line.split(/\s+[|·•]\s+|\s{3,}/).map(cleanContactItem).filter(Boolean);
 }
 
+/** "International Awards": a few capitalised words, no digits or punctuation. */
+function isLabel(text: string): boolean {
+  const parts = text.split(/\s+/);
+  return parts.length <= 4 && parts.every((part) => /^[\p{Lu}&][\p{L}&]*$/u.test(part));
+}
+
 /**
  * Normal case, one date format, no icon junk, and per section prose and
  * lists before entries (the order canonical markdown can round-trip).
@@ -244,9 +250,15 @@ export function normalizeCv(model: CvModel, source = ""): CvModel {
             };
           })
           .filter((block): block is CvModelBlock => block !== null);
+        const entries = blocks.filter((block) => block.type === "entry");
         return {
           heading: text(stripMarkers(section.heading)),
-          blocks: [...blocks.filter((block) => block.type !== "entry"), ...blocks.filter((block) => block.type === "entry")],
+          blocks: [
+            // "International Awards" among award entries is a subheading the fields
+            // can't place; above every entry it only reads as a stray bullet.
+            ...blocks.filter((block) => block.type !== "entry" && !(entries.length >= 2 && block.type === "item" && isLabel(block.text))),
+            ...entries,
+          ],
         };
       })
       .filter((section) => section.heading && section.blocks.length > 0),

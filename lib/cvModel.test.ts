@@ -162,6 +162,26 @@ describe("cvFromFields", () => {
     expect(cvToMarkdown(model)).toContain("### Backend Developer\nNorthwind | Sep 2024 – Present\n- Cut p95 latency");
   });
 
+  it("drops subheadings the fields put above award entries", () => {
+    const award = (title: string) => ({ title, organization: "", location: "", startDate: "2021", endDate: "", bullets: [] });
+    const model = normalizeCv(
+      cvFromFields({
+        name: "Alex",
+        sections: [
+          {
+            heading: "Honors & Awards",
+            paragraph: "",
+            items: ["International Awards", "Domestic Awards"],
+            entries: [award("2nd Place, AWS GameDay"), award("Finalist, DEFCON CTF")],
+          },
+          { heading: "Skills", paragraph: "", items: ["Go", "Python"], entries: [] },
+        ],
+      })!
+    );
+    expect(model.sections[0].blocks.map((block) => block.type)).toEqual(["entry", "entry"]);
+    expect(model.sections[1].blocks).toHaveLength(2);
+  });
+
   it("writes plain text without markers", () => {
     const text = cvModelToPlainText(normalizeCv(cvFromFields(fields)!));
     expect(text).not.toMatch(/[#*]/);
