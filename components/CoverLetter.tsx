@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { AlertCircle, Check, Copy, Download, LoaderCircle, RefreshCw, Sparkles } from "lucide-react";
+import { AlertCircle, Check, Copy, Download, FileText, LoaderCircle, RefreshCw, Sparkles } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAnalysisStore } from "@/store/analysis";
 import type { JobRequirements } from "@/lib/scoring/types";
@@ -63,14 +63,32 @@ export function CoverLetter({ cvText, requirements, letter, onLetterChange }: Co
     }
   }
 
-  function download() {
-    if (!letter) return;
-    const url = URL.createObjectURL(new Blob([letter], { type: "text/plain;charset=utf-8" }));
+  function save(blob: Blob, filename: string) {
+    const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = "cover-letter.txt";
+    link.download = filename;
     link.click();
     URL.revokeObjectURL(url);
+  }
+
+  function downloadText() {
+    if (letter) save(new Blob([letter], { type: "text/plain;charset=utf-8" }), "cover-letter.txt");
+  }
+
+  async function downloadDocx() {
+    if (!letter) return;
+    try {
+      const response = await fetch("/api/export", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ coverLetter: letter }),
+      });
+      if (!response.ok) throw new Error();
+      save(await response.blob(), "cover-letter.docx");
+    } catch {
+      setError("Couldn't create the Word file. Download the .txt instead, or try again.");
+    }
   }
 
   return (
@@ -130,9 +148,13 @@ export function CoverLetter({ cvText, requirements, letter, onLetterChange }: Co
                 {copied ? <Check className="h-4 w-4 text-emerald-600" aria-hidden="true" /> : <Copy className="h-4 w-4" aria-hidden="true" />}
                 {copied ? "Copied" : "Copy"}
               </button>
-              <button type="button" onClick={download} className={BUTTON}>
+              <button type="button" onClick={downloadDocx} className={BUTTON}>
+                <FileText className="h-4 w-4" aria-hidden="true" />
+                Download .docx
+              </button>
+              <button type="button" onClick={downloadText} className={BUTTON}>
                 <Download className="h-4 w-4" aria-hidden="true" />
-                Download .txt
+                .txt
               </button>
               <button type="button" onClick={write} disabled={writing} className={BUTTON}>
                 {writing ? (

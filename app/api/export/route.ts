@@ -1,10 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
-import { generateDocx } from "@/lib/exporters/docx";
+import { generateDocx, generateLetterDocx } from "@/lib/exporters/docx";
 import { generateLatex } from "@/lib/exporters/latex";
 
 export async function POST(request: NextRequest) {
   try {
-    const { improvedCv, format } = await request.json();
+    const { improvedCv, coverLetter, format } = await request.json();
+
+    if (typeof coverLetter === "string" && coverLetter.trim()) {
+      const letter = await generateLetterDocx(coverLetter);
+      return new NextResponse(letter, {
+        status: 200,
+        headers: {
+          "Content-Type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          "Content-Disposition": 'attachment; filename="cover-letter.docx"',
+        },
+      });
+    }
 
     if (!improvedCv || typeof improvedCv !== "string") {
       return NextResponse.json(

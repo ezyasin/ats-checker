@@ -19,6 +19,8 @@ import type {
   ScoreResult,
 } from "../scoring";
 import { normalizeText } from "../scoring/sections";
+import { cvFromFields, cvToMarkdown, normalizeCv, parseCv } from "../cvModel";
+import { preserveOriginal } from "../preserveCv";
 import type { RewriteSuggestion } from "@/types/analysis";
 import { LLMClient, LLMError, LLMProvider } from "./types";
 
@@ -155,6 +157,10 @@ export interface RewriteResult {
   unaddressedKeywords: string[];
 }
 
+// A suggestion should change a bullet or a sentence. Gemini Flash-Lite returned
+// whole roles (employer, title, dates and every bullet) as one "suggestion".
+const MAX_SUGGESTION_LINES = 2;
+
 // A model hedging an invented claim: "Message Queues (simulated)", "[add metric]".
 const PLACEHOLDER = /\b(placeholders?|simulated|hypothetical|tbd|todo|if applicable)\b|\[[^\]]*\]/i;
 
@@ -171,8 +177,28 @@ function readsAs(text: string): string {
     .trim();
 }
 
-export function sanitizeRewrite(data: unknown, provider: LLMProvider): RewriteResult {
-  if (!isRecord(data) || typeof data.improvedCv !== "string" || data.improvedCv.trim().length === 0) {
+/**
+ * True if most of a suggestion's "original" words are in the CV. Models
+ * sometimes quote a line they wrote themselves, which the user can't find.
+ */
+function quotesCv(original: string, cvWords: Set<string>): boolean {
+  const words = readsAs(original).split(" ").filter(Boolean);
+  return words.length > 0 && words.filter((word) => cvWords.has(word)).length >= words.length * 0.8;
+}
+
+/**
+ * The improved CV as canonical markdown: structured fields, or markdown from
+ * older prompts. Sections, contact details and bullets the model dropped or
+ * made up are put right against the original first.
+ */
+function improvedCvMarkdown(value: unknown, originalCv: string): string {
+  const model = typeof value === "string" ? (value.trim() ? parseCv(value) : null) : cvFromFields(value);
+  return model ? cvToMarkdown(normalizeCv(preserveOriginal(model, originalCv), originalCv)) : "";
+}
+
+export function sanitizeRewrite(data: unknown, provider: LLMProvider, originalCv = ""): RewriteResult {
+  const markdown = isRecord(data) ? improvedCvMarkdown(data.improvedCv, originalCv) : "";
+  if (!isRecord(data) || markdown.length === 0) {
     throw new LLMError("invalid_output", provider, "The model did not return an improved CV.");
   }
 
@@ -189,7 +215,7 @@ export function sanitizeRewrite(data: unknown, provider: LLMProvider): RewriteRe
     }));
 
   // Undo placeholder claims in the CV too, so they can't add keywords or score.
-  let improvedCv = data.improvedCv.trim();
+  let improvedCv = markdown;
   for (const suggestion of suggestions) {
     if (PLACEHOLDER.test(suggestion.improved) && !PLACEHOLDER.test(suggestion.original)) {
       improvedCv = improvedCv.split(suggestion.improved).join(suggestion.original);
@@ -198,12 +224,18 @@ export function sanitizeRewrite(data: unknown, provider: LLMProvider): RewriteRe
 
   // Models sometimes repeat a suggestion for the same line; keep the first.
   const seen = new Set<string>();
+  const cvWords = new Set(readsAs(originalCv).split(" "));
+  const improvedText = readsAs(improvedCv);
   return {
     suggestions: suggestions.filter((suggestion) => {
       const key = readsAs(suggestion.original);
       if (seen.has(key)) return false;
       seen.add(key);
       return (
+        suggestion.original.split("\n").filter((line) => line.trim()).length <= MAX_SUGGESTION_LINES &&
+        (!originalCv || quotesCv(suggestion.original, cvWords)) &&
+        // A change the CV doesn't carry (reverted in lib/preserveCv.ts) isn't a suggestion.
+        improvedText.includes(readsAs(suggestion.improved)) &&
         !(PLACEHOLDER.test(suggestion.improved) && !PLACEHOLDER.test(suggestion.original)) &&
         // Same text to an ATS (e.g. "Sep. 2024" -> "Sep 2024"): not worth the user's time.
         readsAs(suggestion.improved) !== readsAs(suggestion.original)
@@ -234,7 +266,7 @@ export async function rewriteCv(
     maxTokens: 16000,
     effort: "medium",
   });
-  return sanitizeRewrite(data, provider);
+  return sanitizeRewrite(data, provider, cvText);
 }
 
 // A letter shorter than this isn't a cover letter; a bracket is an unfilled placeholder.

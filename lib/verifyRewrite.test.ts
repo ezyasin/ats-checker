@@ -82,4 +82,55 @@ describe("verifyRewrite", () => {
     expect(result.suggestions).toHaveLength(1);
     expect(result.removed).toEqual([]);
   });
+
+  it("rejects a real quote that doesn't name the skill and isn't where it was added", () => {
+    // A live Gemini rewrite: job keywords appended to the skills line, "proven" by an unrelated sentence.
+    const quote = "Migrated three Node.js services to Docker";
+    const result = verify({
+      improvedCv: CV.replace("Docker, AWS", "Docker, AWS, Kafka, Kubernetes"),
+      addedKeywords: [
+        { keyword: "Kafka", evidence: quote },
+        { keyword: "Kubernetes", evidence: quote },
+      ],
+    });
+    expect(result.evidence).toEqual({});
+    expect(result.improvedCv.endsWith("Go, Python, SQL, Docker, AWS")).toBe(true);
+    expect(result.removed.sort()).toEqual(["Kafka", "Kubernetes"]);
+  });
+
+  it("accepts a quote that names the skill in other words", () => {
+    const cv = `${CV}\n- Wrote unit tests with Jest`;
+    const job: JobRequirements = {
+      ...JOB,
+      keywords: [{ term: "unit testing", synonyms: [], category: "hard_skill", importance: "required" }],
+    };
+    const result = verifyRewrite(
+      {
+        suggestions: [],
+        improvedCv: cv.replace("Docker, AWS", "Docker, AWS, unit testing"),
+        addedKeywords: [{ keyword: "unit testing", evidence: "Wrote unit tests with Jest" }],
+      },
+      cv,
+      job,
+      scoreCv(cv, job, { now: NOW })
+    );
+    expect(result.evidence).toEqual({ "unit testing": "Wrote unit tests with Jest" });
+  });
+
+  it("doesn't let one quote prove three skills, or a skill the model gave up on", () => {
+    const quote = "Migrated three Node.js services to Docker and deployed them on AWS";
+    const improvedCv = CV.replace(quote, `${quote} using Kafka, Kubernetes and containerization`);
+    const result = verify({
+      improvedCv,
+      addedKeywords: ["Kafka", "Kubernetes", "containerization"].map((keyword) => ({ keyword, evidence: quote })),
+    });
+    expect(result.evidence).toEqual({});
+
+    const gaveUp = verify({
+      improvedCv: CV.replace(quote, `Containerization: ${quote}`),
+      addedKeywords: [{ keyword: "containerization", evidence: quote }],
+      unaddressedKeywords: ["containerization"],
+    });
+    expect(gaveUp.evidence).toEqual({});
+  });
 });

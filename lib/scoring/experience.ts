@@ -45,6 +45,20 @@ function rangeMatches(text: string): { all: RegExpMatchArray[]; adjacent: RegExp
   return { all: [...separated, ...adjacent], adjacent };
 }
 
+/** The first date range in a line, e.g. for laying out a CV entry. */
+export function matchDateRange(text: string): { start: string; end: string; index: number; length: number } | null {
+  const [match] = rangeMatches(text).all.sort((a, b) => (a.index ?? 0) - (b.index ?? 0));
+  if (!match) return null;
+  return { start: match[1], end: match[2], index: match.index ?? 0, length: match[0].length };
+}
+
+const SINGLE_DATE = new RegExp(`^(?:${DATE}|${OPEN_END})$`, "i");
+
+/** True for one date on its own: "Jun 2024", "06/2024", "2024", "Present". */
+export function isSingleDate(text: string): boolean {
+  return SINGLE_DATE.test(text.trim());
+}
+
 /** Date ranges that lost their dash in extraction, e.g. "Sep. 2023 Mar. 2024". */
 export function datesWithoutSeparator(text: string): string[] {
   return rangeMatches(text).adjacent.map((match) => match[0]);
